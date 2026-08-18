@@ -205,7 +205,7 @@ const Render = (function () {
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.1;
+    renderer.toneMappingExposure = 1.32;
 
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x9ec8e2);
@@ -248,9 +248,9 @@ const Render = (function () {
     scene.add(sunSprite);
 
     // 灯光
-    const hemi = new THREE.HemisphereLight(0xcfe4f2, 0x8d7c5e, 0.85);
+    const hemi = new THREE.HemisphereLight(0xd7eaf5, 0xa08f70, 1.2);
     scene.add(hemi);
-    sun = new THREE.DirectionalLight(0xfff1d0, 2.2);
+    sun = new THREE.DirectionalLight(0xfff4d8, 2.9);
     sun.position.set(38, 55, -30);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
@@ -925,21 +925,24 @@ const Render = (function () {
         g.scale.set(scale, scale, scale);
         const sp = Math.hypot(m.vel.x, m.vel.z);
         m.vel.x += (p.vx - m.vel.x) * 0.3; m.vel.z += (p.vz - m.vel.z) * 0.3;
-        g.userData.walkPhase += (0.5 + sp * 1.6) * 0.16;
+        // 时间基准步态：约 2.9 步/秒（跑步节奏），帧率无关、动作自然
+        g.userData.walkPhase = performance.now() * 0.001 * (2.2 + sp * 1.35);
         const ph = g.userData.walkPhase;
-        const swing = Math.sin(ph) * Math.min(0.8, sp * 0.28);
+        const swing = Math.sin(ph) * Math.min(0.7, sp * 0.22);
         g.userData.legL.rotation.x = swing;
         g.userData.legR.rotation.x = -swing;
-        g.userData.armL.rotation.x = -swing * 0.55;
-        g.userData.armR.rotation.x = swing * 0.55;
+        g.userData.armL.rotation.x = -swing * 0.5;
+        g.userData.armR.rotation.x = swing * 0.5;
+        // 身体起伏（落脚时轻微下沉）
+        const bob = Math.abs(Math.sin(ph)) * Math.min(0.022, sp * 0.004);
         // 奔跑前倾 + 蹲姿压腿
         const lean = Math.min(0.14, sp * 0.028);
         g.userData.torso.rotation.x = -lean;
         g.userData.vestMesh.rotation.x = -lean;
         g.userData.legL.scale.y = p.crouch ? 0.55 : 1;
         g.userData.legR.scale.y = p.crouch ? 0.55 : 1;
-        g.userData.torso.position.y = p.crouch ? 0.98 : 1.12;
-        g.userData.vestMesh.position.y = p.crouch ? 1.02 : 1.16;
+        g.userData.torso.position.y = (p.crouch ? 0.98 : 1.12) + bob;
+        g.userData.vestMesh.position.y = (p.crouch ? 1.02 : 1.16) + bob * 0.8;
         g.userData.head.position.y = p.crouch ? 1.36 : 1.56;
         g.userData.helm.position.y = p.crouch ? 1.47 : 1.67;
         g.userData.brim.position.y = p.crouch ? 1.445 : 1.645;
