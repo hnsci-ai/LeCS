@@ -413,7 +413,7 @@ const Render = (function () {
       s.scale.set(0.16 + Math.random() * 0.08, 0.16 + Math.random() * 0.08, 1);
       s.visible = false;
       scene.add(s);
-      decalPool.push({ mesh: s, mat, life: 0, maxLife: 7, type: 'scorch' });
+      decalPool.push({ mesh: s, mat, life: 0, maxLife: 5, type: 'scorch' });
     }
     // 地面血泊
     const bloodTex = makeCanvas(64, 64, (g, w, h) => {
@@ -438,7 +438,7 @@ const Render = (function () {
       m.rotation.z = Math.random() * Math.PI * 2;
       m.visible = false;
       scene.add(m);
-      decalPool.push({ mesh: m, mat, life: 0, maxLife: 12, type: 'blood' });
+      decalPool.push({ mesh: m, mat, life: 0, maxLife: 6, type: 'blood' });
     }
     // 弹壳
     for (let i = 0; i < 10; i++) {

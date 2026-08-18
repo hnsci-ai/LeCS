@@ -184,13 +184,19 @@ const Ragdoll = (function () {
         r.meshes[i].quaternion.copy(r.bodies[i].quaternion);
       }
       const age = now - r.born;
-      if (age > 5500) {
+      if (age > 3000) {
+        // 3 秒后开始下沉淡出（CS 风格，约 4 秒完全消失）
         if (!r.fading) {
           r.fading = true;
           for (const m of r.mats) m.transparent = true;
         }
-        const op = Math.max(0, 1 - (age - 5500) / 700);
+        const op = Math.max(0, 1 - (age - 3000) / 1000);
         for (const m of r.mats) m.opacity = op;
+        if (r.fading) {
+          for (let i = 0; i < r.meshes.length; i++) {
+            r.meshes[i].position.y -= (1 - op) * 0.05; // 下沉
+          }
+        }
         if (op <= 0) removeRagdoll(r);
       }
     }
