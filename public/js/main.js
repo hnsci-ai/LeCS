@@ -20,6 +20,11 @@ const Main = (function () {
 
   // ---------- 大厅 ----------
   function initLobby() {
+    // 音频初始化：浏览器要求 AudioContext 必须在用户手势中创建/恢复
+    // （修复：此前从未调用 Audio.resume()，导致全程无声）
+    document.addEventListener('click', () => Audio.resume());
+    document.addEventListener('mousedown', () => Audio.resume());
+    document.addEventListener('keydown', () => Audio.resume());
     document.getElementById('botcount').addEventListener('input', (e) => {
       document.getElementById('botcount-label').textContent = e.target.value;
     });
@@ -39,6 +44,7 @@ const Main = (function () {
   function lobbyMsg(text) { document.getElementById('lobby-msg').textContent = text; }
 
   function start(opts) {
+    Audio.resume(); // 在按钮点击的手势中立即创建/恢复音频
     const name = document.getElementById('nick').value.trim() || '玩家';
     const mode = document.getElementById('mode').value;
     const team = document.getElementById('team').value;

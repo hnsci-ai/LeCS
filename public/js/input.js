@@ -28,7 +28,16 @@ const Input = (function () {
   let fire = false;
   let fireAltEdge = false;
 
+  // 正在输入框/下拉框打字时，不拦截按键（修复大厅昵称/房间码无法输入 1-5 与部分字母）
+  function isTypingTarget(e) {
+    const t = e.target;
+    if (!t) return false;
+    const tag = t.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t.isContentEditable;
+  }
+
   document.addEventListener('keydown', (e) => {
+    if (isTypingTarget(e)) return;
     const act = KEYMAP[e.code];
     if (act) {
       e.preventDefault();
@@ -43,6 +52,7 @@ const Input = (function () {
     }
   });
   document.addEventListener('keyup', (e) => {
+    if (isTypingTarget(e)) return;
     const act = KEYMAP[e.code];
     if (act) {
       e.preventDefault();

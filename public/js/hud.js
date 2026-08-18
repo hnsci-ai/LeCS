@@ -105,7 +105,7 @@ const HUD = (function () {
   function showBuyMenu(open) {
     el.buymenu.classList.toggle('hidden', !open);
   }
-  function buyOpen() { return !el.buymenu.classList.contains('hidden'); }
+  function buyOpen() { return !!el.buymenu && !el.buymenu.classList.contains('hidden'); }
 
   // ---------- 记分板 ----------
   function showScoreboard(open, roster, snap) {

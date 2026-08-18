@@ -6,6 +6,7 @@ const Audio = (function () {
   let lastStep = 0;
   let stepSide = 1;
   let bombBeepAt = 0;
+  let plays = 0; // 测试辅助：已调度播放的音效数
 
   function ensure() {
     if (ctx) return;
@@ -28,6 +29,7 @@ const Audio = (function () {
   // 通用噪声爆发
   function burst(opts) {
     if (!ctx) return;
+    plays++;
     const len = Math.floor(ctx.sampleRate * (opts.dur || 0.12));
     const src = ctx.createBufferSource();
     src.buffer = noiseBuffer(len);
@@ -46,6 +48,7 @@ const Audio = (function () {
 
   function tone(freq, dur, vol, type, when, slideTo) {
     if (!ctx) return;
+    plays++;
     const o = ctx.createOscillator();
     o.type = type || 'square';
     const t = ctx.currentTime + (when || 0);
@@ -139,6 +142,8 @@ const Audio = (function () {
 
   return {
     ensure, resume, gunshot, footsteps, reload, hit, hurt, explosion,
-    bombBeep, roundEnd, roundStart, plantSound, throwSound, bounceSound, buySound, denySound, emptyClick, scopeSound
+    bombBeep, roundEnd, roundStart, plantSound, throwSound, bounceSound, buySound, denySound, emptyClick, scopeSound,
+    // 测试辅助
+    _debugState: () => ({ created: !!ctx, state: ctx ? ctx.state : 'none', plays })
   };
 })();
