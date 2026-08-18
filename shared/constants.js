@@ -10,7 +10,7 @@
     RUN_SPEED: 4.7,           // 跑步速度
     WALK_SPEED: 2.35,         // 静步
     CROUCH_SPEED: 1.6,        // 蹲走
-    JUMP_VEL: 5.1,            // 起跳速度
+    JUMP_VEL: 5.7,            // 起跳速度（跳高约 1.07m，可上沙袋/油桶，木箱需借力）
     AIR_ACCEL: 12,            // 空中加速度
     GROUND_ACCEL: 60,         // 地面加速度
     STOP_ACCEL: 90,           // 减速

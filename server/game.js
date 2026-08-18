@@ -154,6 +154,7 @@ class Game {
     p.brain = new BotBrain(this, p);
     if (this.mode === 'classic' && this.phase !== C.STATE_LIVE) this.spawnPlayer(p);
     else if (this.mode === 'classic') { p.spectator = true; }
+    else if (this.mode === 'dm' || this.mode === 'armsrace' || this.mode === 'test') this.spawnPlayer(p); // 复活类模式直接入场（测试模式 Bot 站桩）
     this.broadcastRoster();
     return p;
   }
@@ -263,7 +264,7 @@ class Game {
   // ---------- 回合 ----------
   startRound() {
     this.round++;
-    const instantLive = this.mode === 'dm' || this.mode === 'armsrace';
+    const instantLive = this.mode === 'dm' || this.mode === 'armsrace' || this.mode === 'test';
     this.phase = instantLive ? C.STATE_LIVE : C.STATE_FREEZE;
     this.timeLeft = instantLive ? 86400 : C.FREEZE_TIME;
     this.bomb = { state: C.BOMB_HIDDEN, carrier: null, x: 0, y: 0, z: 0, site: null, timeLeft: C.BOMB_TIME };
@@ -296,6 +297,7 @@ class Game {
       }
       delete p.weapons[5];
       p.survived = false;
+      if (this.mode === 'test') p.money = 16000; // 测试靶场：资金充足随便买
       this.spawnPlayer(p);
       if (p.team === C.TEAM_T) aliveTs.push(p);
       p.planting = 0; p.defusing = 0;
@@ -541,6 +543,7 @@ class Game {
 
   validateBuy(p, id) {
     if (this.mode === 'armsrace') return { ok: false, reason: '军备竞赛无需购买' };
+    if (this.mode === 'test') return { ok: true }; // 测试靶场：随时随地买
     if (this.mode !== 'dm' && this.phase === C.STATE_END) return { ok: false, reason: '回合已结束' };
     if (this.mode === 'dm') return { ok: true };
     if (!p.alive) return { ok: false, reason: '已阵亡' };
@@ -637,13 +640,13 @@ class Game {
       this.timeLeft -= dt;
       this.players.forEach(p => {
         if (p.alive) {
-          if (p.bot && p.brain) p.brain.update(dt);
+          if (p.bot && p.brain && this.mode !== 'test') p.brain.update(dt); // 测试模式 Bot 完全静止
           else this.applyLook(p);
           MOV.step(p, p.in, dt, this.mapData.walls);
           p.in.jump = false;
           this.historyPush(p);
           this.checkPickup(p);
-        } else if ((this.mode === 'dm' || this.mode === 'armsrace') && !p.spectator && now >= p.respawnAt) {
+        } else if ((this.mode === 'dm' || this.mode === 'armsrace' || this.mode === 'test') && !p.spectator && now >= p.respawnAt) {
           this.spawnPlayer(p);
           if (this.mode === 'armsrace') this.giveArmsLoadout(p);
         }
@@ -665,7 +668,7 @@ class Game {
         this.crates = this.crates.filter(c => now2 - c.born < 30000);
       }
       this.checkRoundEnd();
-      if (this.timeLeft <= 0) {
+      if (this.timeLeft <= 0 && this.mode !== 'test') {
         // 经典/军备：CT 胜；人质营救：时间到 T 胜（人质未获救）
         this.endRound(this.mode === 'hostage' ? 't' : 'ct', '时间到');
       }
@@ -673,7 +676,7 @@ class Game {
       this.timeLeft -= dt;
       this.players.forEach(p => {
         if (p.alive) { MOV.step(p, p.in, dt, this.mapData.walls); this.historyPush(p); }
-        if (p.bot && p.brain) p.brain.update(dt);
+        if (p.bot && p.brain && this.mode !== 'test') p.brain.update(dt);
       });
       this.tickNades(dt);
       this.tickSmokes(dt);
@@ -958,7 +961,7 @@ class Game {
     if (this.killfeed.length > 6) this.killfeed.pop();
     this.emitEvent({ type: 'kill', killer: killer.id, victim: victim.id, weapon: wid, headshot: !!headshot, teamkill: teamKill });
 
-    if (this.mode === 'dm' || this.mode === 'armsrace') {
+    if (this.mode === 'dm' || this.mode === 'armsrace' || this.mode === 'test') {
       victim.respawnAt = Date.now() + (victim.bot ? 1500 : 2000);
     }
     // 连杀播报

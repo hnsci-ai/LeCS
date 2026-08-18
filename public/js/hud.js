@@ -190,6 +190,7 @@ const HUD = (function () {
     if (ui.phase === 'freeze') el.phase.textContent = '❄ 冻结时间 — 按 B 购买装备';
     else if (ui.phase === 'end') el.phase.textContent = '回合结束';
     else if (ui.phase === 'live' && ui.mode === 'dm') el.phase.textContent = '死斗模式';
+    else if (ui.phase === 'live' && ui.mode === 'test') el.phase.textContent = '🧪 测试靶场 — Bot 静止 · 尸体保留';
     else if (ui.phase === 'live' && ui.mode === 'hostage') {
       const teamTxt = ui.my ? (ui.my[8] === 0 ? '你是恐怖分子 T · 阻止营救' : '你是反恐精英 CT · 救回人质') : '';
       el.phase.textContent = '人质 ' + (ui.rescued || 0) + '/4 · ' + teamTxt;
@@ -321,7 +322,7 @@ const HUD = (function () {
   }
 
   function setRoomCode(code, map) {
-    const mapName = map === 'dust2' ? '沙漠二' : (map === 'arms' ? '军备竞技场' : '仓库');
+    const mapName = map === 'dust2' ? '沙漠二' : (map === 'arms' ? '军备竞技场' : (map === 'test' ? '测试靶场' : '仓库'));
     el.roomCode.textContent = (code || '----') + (map ? ' · ' + mapName : '');
   }
 

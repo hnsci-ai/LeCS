@@ -56,7 +56,7 @@ function newCode() {
 }
 function createRoom(mode, map) {
   const code = newCode();
-  const effMap = mode === 'armsrace' ? 'arms' : (map || 'dust'); // 军备竞赛专用小图
+  const effMap = mode === 'armsrace' ? 'arms' : (mode === 'test' ? 'test' : (map || 'dust')); // 军备竞赛/测试模式专用图
   const game = new Game(code, mode, effMap);
   rooms.set(code, game);
   game.start();
@@ -79,7 +79,7 @@ wss.on('connection', (ws) => {
     if (msg.t === 'join') {
       if (player) return;
       const name = String(msg.name || '玩家').slice(0, 16);
-      const MODES = { classic: 'classic', dm: 'dm', hostage: 'hostage', armsrace: 'armsrace' };
+      const MODES = { classic: 'classic', dm: 'dm', hostage: 'hostage', armsrace: 'armsrace', test: 'test' };
       const mode = MODES[msg.mode] || 'classic';
       let room = msg.code ? rooms.get(String(msg.code).toUpperCase()) : null;
       if (room && room.mode !== mode) {

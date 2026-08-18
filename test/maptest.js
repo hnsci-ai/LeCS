@@ -114,6 +114,7 @@ function validateMap(MAP, name) {
 validateMap(MAPS.dust, 'dust 仓库');
 validateMap(MAPS.dust2, 'dust2 沙漠二');
 validateMap(MAPS.arms, 'arms 军备竞技场(小图)');
+validateMap(MAPS.test, 'test 测试靶场(空旷)');
 
 console.log(failures === 0 ? '\n全部通过 ✓' : `\n${failures} 项失败 ✗`);
 process.exit(failures === 0 ? 0 : 1);

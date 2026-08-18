@@ -59,6 +59,16 @@ function run(wall, label, p, frames, mover) {
   check(r.p.y === 0, '脱困后回到地面（y=' + r.p.y.toFixed(2) + '）');
 }
 
+// 3.5 提高跳跃高度后：油桶(1.05m)也能跳上
+{
+  let jumped = false;
+  const r = run({ x1: -1.2, y1: 0, z1: -1.2, x2: 1.2, y2: 1.05, z2: 1.2 }, '油桶(1.05m)', mkPlayer(-3, 0, 0), 180, (i) => {
+    if (i > 5 && !jumped) { jumped = true; return { f: true, jump: true }; }
+    return { f: true };
+  });
+  check(r.stoodTop, '跳高提高后可跳上油桶站顶');
+}
+
 // 4. 高木箱跳不上去
 {
   let jumped = false;

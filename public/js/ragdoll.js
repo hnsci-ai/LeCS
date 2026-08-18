@@ -4,10 +4,12 @@ const Ragdoll = (function () {
   let world = null;
   let scene = null;
   let ragMat = null; // 所有布娃娃共用材质（碰撞接触对只需注册一次）
-  const active = new Map();   // playerId -> ragdoll
+  const active = new Map();   // key -> ragdoll（普通模式 key=playerId；测试模式 key 唯一，允许堆尸）
   const hitInfo = new Map();  // playerId -> {dir, power, t}
   let lastError = null;      // 最近一次生成异常（供诊断）
-  const MAX_RAGDOLLS = 4;   // 同屏尸体上限
+  let persistent = false;    // 测试模式：尸体永不消失，同 id 可堆多具
+  let spawnSeq = 0;
+  const MAX_RAGDOLLS = 4;    // 同屏尸体上限（测试模式放宽到 60）
 
   const COL_STATIC = 1, COL_RAG = 2;
   const geoCache = new Map();
@@ -84,9 +86,11 @@ const Ragdoll = (function () {
   // 生成布娃娃
   function spawn(id, x, y, z, yaw, team, armor, helmet) {
     if (!world) return;
-    if (active.has(id)) return;
+    const key = persistent ? (id + '#' + (++spawnSeq)) : id;
+    if (!persistent && active.has(key)) return;
     // 超过上限移除最老的
-    if (active.size >= MAX_RAGDOLLS) {
+    const maxN = persistent ? 60 : MAX_RAGDOLLS;
+    if (active.size >= maxN) {
       const oldest = active.keys().next().value;
       removeRagdoll(active.get(oldest));
     }
@@ -177,13 +181,15 @@ const Ragdoll = (function () {
         }
       }
 
-      const r = { id, bodies, meshes, constraints, mats, extras, born: performance.now(), fading: false, timer: null };
-      // 硬性定时清理：不依赖渲染循环/帧率，2.5 秒后无条件移除（用户反馈尸体 10 秒不消失）
-      r.timer = setTimeout(() => {
-        const rr = active.get(id);
-        if (rr) removeRagdoll(rr);
-      }, 2500);
-      active.set(id, r);
+      const r = { id, key, bodies, meshes, constraints, mats, extras, born: performance.now(), fading: false, timer: null };
+      // 普通模式：硬性定时清理（不依赖渲染循环，2.5 秒后无条件移除）；测试模式：永久保留
+      if (!persistent) {
+        r.timer = setTimeout(() => {
+          const rr = active.get(key);
+          if (rr) removeRagdoll(rr);
+        }, 2500);
+      }
+      active.set(key, r);
     } catch (e) {
       // 生成失败兜底：清理已加入场景/世界的部件，绝不留下没有清理定时器的孤儿尸体
       for (const m of meshes) scene.remove(m);
@@ -196,8 +202,15 @@ const Ragdoll = (function () {
   }
 
   function removeFor(id) {
+    if (persistent) return; // 测试模式：复活不清理尸体
     const r = active.get(id);
     if (r) removeRagdoll(r);
+  }
+
+  function setPersistent(v) {
+    if (persistent === v) return;
+    persistent = !!v;
+    if (!persistent) clearAll(); // 退出测试模式时清掉堆积的尸体
   }
 
   function removeRagdoll(r) {
@@ -227,6 +240,7 @@ const Ragdoll = (function () {
         e.mesh.quaternion.copy(r.bodies[e.body].quaternion);
       }
       const age = now - r.born;
+      if (persistent) continue; // 测试模式：尸体永久保留（不淡出不清理）
       // 硬性兜底：超过 5 秒无条件移除（另有 2.5 秒 setTimeout 定时清理双保险）
       if (age > 5000) { removeRagdoll(r); continue; }
       if (age > 900) {
@@ -263,5 +277,5 @@ const Ragdoll = (function () {
     return out;
   }
 
-  return { init, spawn, removeFor, registerHit, update, clearAll, _debugCount, _debugState, _debugExtras: () => Array.from(active.values()).map(r => r.extras.length), _debugInfo: () => ({ active: active.size, lastError }) };
+  return { init, spawn, removeFor, setPersistent, registerHit, update, clearAll, _debugCount, _debugState, _debugExtras: () => Array.from(active.values()).map(r => r.extras.length), _debugInfo: () => ({ active: active.size, persistent, lastError }) };
 })();

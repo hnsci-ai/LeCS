@@ -520,10 +520,42 @@
     }
   };
 
+  // ================= 地图四：test（测试靶场：空旷小场地、无掩体） =================
+  var testDef = {
+    bound: 14,
+    rooms: [
+      { id: 'field', x1: -14, z1: -14, x2: 14, z2: 14, open: {} }
+    ],
+    crateDefs: [],
+    coverDefs: {},
+    hostageSpots: [
+      { x: 0, z: 0 }, { x: 5, z: 5 }, { x: -5, z: 5 }, { x: 5, z: -5 }
+    ],
+    spawns: {
+      t: [
+        { x: -10, z: 10, yaw: 0 }, { x: -5, z: 10, yaw: 0 },
+        { x: 0, z: 10, yaw: 0 }, { x: 5, z: 10, yaw: 0 }, { x: 10, z: 10, yaw: 0 }
+      ],
+      ct: [
+        { x: -10, z: -10, yaw: Math.PI }, { x: -5, z: -10, yaw: Math.PI },
+        { x: 0, z: -10, yaw: Math.PI }, { x: 5, z: -10, yaw: Math.PI }, { x: 10, z: -10, yaw: Math.PI }
+      ]
+    },
+    buyZones: {
+      t: { x1: -14, z1: -14, x2: 14, z2: 14 },
+      ct: { x1: -14, z1: -14, x2: 14, z2: 14 }
+    },
+    sites: {
+      a: { rect: { x1: -4, z1: -4, x2: 4, z2: 4 }, plant: { x: 0, z: 0 }, radius: 4, letter: 'A' },
+      b: { rect: { x1: 8, z1: 8, x2: 14, z2: 14 }, plant: { x: 11, z: 11 }, radius: 4, letter: 'B' }
+    }
+  };
+
   var MAPS = {
     dust: buildMap(dustDef),
     dust2: buildMap(dust2Def),
-    arms: buildMap(armsDef)
+    arms: buildMap(armsDef),
+    test: buildMap(testDef)
   };
 
   return { MAPS: MAPS, MAPDATA: MAPS.dust };
