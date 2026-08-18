@@ -6,7 +6,7 @@ const Ragdoll = (function () {
   let ragMat = null; // 所有布娃娃共用材质（碰撞接触对只需注册一次）
   const active = new Map();   // playerId -> ragdoll
   const hitInfo = new Map();  // playerId -> {dir, power, t}
-  const MAX_RAGDOLLS = 8;
+  const MAX_RAGDOLLS = 4;   // 同屏尸体上限
 
   const COL_STATIC = 1, COL_RAG = 2;
   const geoCache = new Map();
@@ -184,17 +184,19 @@ const Ragdoll = (function () {
         r.meshes[i].quaternion.copy(r.bodies[i].quaternion);
       }
       const age = now - r.born;
-      if (age > 3000) {
-        // 3 秒后开始下沉淡出（CS 风格，约 4 秒完全消失）
+      // 硬性兜底：超过 5 秒无条件移除
+      if (age > 5000) { removeRagdoll(r); continue; }
+      if (age > 1200) {
+        // 1.2 秒后开始下沉淡出（约 2 秒完全消失）
         if (!r.fading) {
           r.fading = true;
           for (const m of r.mats) m.transparent = true;
         }
-        const op = Math.max(0, 1 - (age - 3000) / 1000);
+        const op = Math.max(0, 1 - (age - 1200) / 800);
         for (const m of r.mats) m.opacity = op;
         if (r.fading) {
           for (let i = 0; i < r.meshes.length; i++) {
-            r.meshes[i].position.y -= (1 - op) * 0.05; // 下沉
+            r.meshes[i].position.y -= (1 - op) * 0.06; // 下沉
           }
         }
         if (op <= 0) removeRagdoll(r);

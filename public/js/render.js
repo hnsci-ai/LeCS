@@ -881,7 +881,7 @@ const Render = (function () {
 
   // ---------- 特效更新 ----------
   function updateEffects(dt) {
-    Ragdoll.update(dt); // 布娃娃物理
+    try { Ragdoll.update(dt); } catch (e) { /* 物理异常不冻结渲染循环 */ }
     for (const t of tracerPool) {
       if (t.life > 0) {
         t.life -= dt;

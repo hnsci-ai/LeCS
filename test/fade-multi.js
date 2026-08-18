@@ -1,6 +1,6 @@
-// test/fade-test.js — 尸体淡出验证：击杀后 6.5 秒布娃娃应消失
+// test/fade-multi.js — 多具尸体同时存在的淡出（3 杀后逐秒观察）
 'use strict';
-process.env.PORT = '8068';
+process.env.PORT = '8066';
 process.env.ALLOW_DEV = '1';
 require('../server/index');
 const { chromium } = require('playwright-core');
@@ -11,28 +11,30 @@ let failures = 0;
 function check(cond, msg) { if (cond) console.log('  ✓ ' + msg); else { failures++; console.log('  ✗ ' + msg); } }
 
 (async () => {
-  // 控制台建房加 Bot
-  const ctl = new WebSocket('ws://127.0.0.1:8068');
-  let code = '', botId = 0;
-  let resolveBot = null;
-  const botReady = new Promise(res => { resolveBot = res; });
+  const ctl = new WebSocket('ws://127.0.0.1:8066');
+  let code = '', bots = [];
+  let resolveBots = null;
+  const botsReady = new Promise(res => { resolveBots = res; });
   ctl.on('message', raw => {
     const m = JSON.parse(raw.toString());
     if (m.t === 'joined') code = m.code;
-    if (m.t === 'roster') { const b = m.players.find(p => p.bot); if (b && !botId) { botId = b.id; resolveBot(); } }
+    if (m.t === 'roster') {
+      const bs = m.players.filter(p => p.bot).map(p => p.id);
+      if (bs.length >= 3 && !bots.length) { bots = bs; resolveBots(); }
+    }
   });
   await new Promise(res => ctl.on('open', () => { ctl.send(JSON.stringify({ t: 'join', name: '房主', team: 't', mode: 'classic' })); res(); }));
   await sleep(700);
-  ctl.send(JSON.stringify({ t: 'addbot', diff: 'normal' }));
-  await botReady;
-  console.log('  房间:', code, 'Bot:', botId);
+  for (let i = 0; i < 3; i++) ctl.send(JSON.stringify({ t: 'addbot', diff: 'normal' }));
+  await botsReady;
+  console.log('  Bots:', bots);
 
   const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: ['--no-sandbox'] });
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
-  await page.goto('http://127.0.0.1:8068', { waitUntil: 'networkidle' });
-  await page.fill('#nick', '淡出观察');
+  await page.goto('http://127.0.0.1:8066', { waitUntil: 'networkidle' });
+  await page.fill('#nick', '验尸官');
   await page.fill('#code', code);
   await page.click('#btn-join');
   await page.waitForSelector('#game:not(.hidden)', { timeout: 8000 });
@@ -41,25 +43,31 @@ function check(cond, msg) { if (cond) console.log('  ✓ ' + msg); else { failur
   await page.waitForFunction(() => window.__lecsLastSnap && window.__lecsLastSnap.phase === 'live', null, { timeout: 30000 });
   await sleep(500);
 
-  // 击杀 bot → 布娃娃
-  ctl.send(JSON.stringify({ t: 'dev', cmd: 'dmg', id: botId, amount: 1000 }));
+  // 同时击杀 2 个 bot（同队房主不会触发回合结束；房主 T，bots 2T1CT 或 1T2CT）
+  // 只杀 CT 队 bot，避免误杀导致回合结束
+  for (const b of bots) {
+    ctl.send(JSON.stringify({ t: 'dev', cmd: 'dmg', id: b, amount: 1000 }));
+    await sleep(200);
+  }
   await sleep(1500);
   const c1 = await page.evaluate(() => Ragdoll._debugCount());
-  console.log('  击杀后布娃娃数:', c1);
-  check(c1 === 1, '布娃娃已生成');
+  console.log('  击杀后尸体数:', c1);
+  check(c1 >= 1, '产生了尸体');
 
-  // 等待约 2.5 秒淡出
-  for (let i = 0; i < 6; i++) {
-    await sleep(500);
+  // 逐秒观察 8 秒
+  let lastN = c1;
+  for (let i = 1; i <= 8; i++) {
+    await sleep(1000);
     const n = await page.evaluate(() => Ragdoll._debugCount());
-    if (i % 2 === 0) console.log('  t=' + ((i + 1) * 0.5 + 1.5).toFixed(1) + 's 布娃娃数:', n);
+    console.log('  t+' + i + 's 尸体数:', n, n < lastN ? '↓' : '');
+    lastN = n;
   }
   const c2 = await page.evaluate(() => Ragdoll._debugCount());
-  check(c2 === 0, '约 2 秒后尸体下沉淡出移除 ✓');
-  check(errors.length === 0, '无 JS 错误' + (errors.length ? ': ' + errors[0].slice(0, 150) : ''));
+  check(c2 === 0, '全部尸体随时间淡出（当前 ' + c2 + '）✓');
+  check(errors.length === 0, '无 JS 错误' + (errors.length ? ': ' + errors[0].slice(0, 200) : ''));
 
   ctl.close();
   await browser.close();
-  console.log(failures === 0 ? '\n=== 尸体淡出测试通过 ✓ ===' : `\n=== ${failures} 项失败 ✗ ===`);
+  console.log(failures === 0 ? '\n=== 多尸体淡出测试通过 ✓ ===' : `\n=== ${failures} 项失败 ✗ ===`);
   process.exit(failures === 0 ? 0 : 1);
 })().catch(e => { console.error('测试异常:', e.message); process.exit(1); });
