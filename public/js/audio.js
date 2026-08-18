@@ -47,14 +47,19 @@ const Audio = (function () {
     g.gain.setValueAtTime(opts.vol || 0.5, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + (opts.dur || 0.12));
     src.connect(filt); filt.connect(g);
+    let pn = null;
     if (opts.pan !== undefined && ctx.createStereoPanner) {
-      const pn = ctx.createStereoPanner();
+      pn = ctx.createStereoPanner();
       pn.pan.value = Math.max(-1, Math.min(1, opts.pan));
       g.connect(pn); pn.connect(master);
     } else {
       g.connect(master);
     }
     src.start(t);
+    // 播放结束即断开全部节点（否则长期游戏音频图无限膨胀导致卡顿）
+    src.onended = () => {
+      try { src.disconnect(); filt.disconnect(); g.disconnect(); if (pn) pn.disconnect(); } catch (e) { /* 已断开 */ }
+    };
     if (opts.playback) src.playbackRate.value = opts.playback;
   }
 
@@ -71,6 +76,7 @@ const Audio = (function () {
     g.gain.exponentialRampToValueAtTime(0.001, t + dur);
     o.connect(g); g.connect(master);
     o.start(t); o.stop(t + dur + 0.02);
+    o.onended = () => { try { o.disconnect(); g.disconnect(); } catch (e) { /* 已断开 */ } };
   }
 
   // 各武器枪声

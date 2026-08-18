@@ -428,46 +428,46 @@ const Render = (function () {
     }
   }
 
-  // ---------- 战利品箱（舔包） ----------
-  const crateMeshes = new Map(); // id -> group
-  function ensureCrate(id) {
-    let g = crateMeshes.get(id);
-    if (!g) {
-      g = new THREE.Group();
-      const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.65, 0.75),
-        new THREE.MeshLambertMaterial({ color: 0x4a5540 }));
-      body.position.y = 0.33;
-      const lid = new THREE.Mesh(new THREE.BoxGeometry(0.94, 0.1, 0.79),
-        new THREE.MeshLambertMaterial({ color: 0x5d6b4e }));
-      lid.position.y = 0.71;
-      const strap = new THREE.Mesh(new THREE.BoxGeometry(0.94, 0.09, 0.1),
-        new THREE.MeshLambertMaterial({ color: 0x2e352a }));
-      strap.position.y = 0.45;
-      const glow = new THREE.Mesh(new THREE.BoxGeometry(0.97, 0.02, 0.82),
-        new THREE.MeshBasicMaterial({ color: 0xffe9a0, transparent: true, opacity: 0.7 }));
-      glow.position.y = 0.72;
-      g.add(body, lid, strap, glow);
-      g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-      scene.add(g);
-      crateMeshes.set(id, g);
-    }
+  // ---------- 战利品箱（舔包）— 固定对象池，不按 id 无限累积 ----------
+  const crateMeshes = [];
+  function buildCrateModel() {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.65, 0.75),
+      new THREE.MeshLambertMaterial({ color: 0x4a5540 }));
+    body.position.y = 0.33;
+    const lid = new THREE.Mesh(new THREE.BoxGeometry(0.94, 0.1, 0.79),
+      new THREE.MeshLambertMaterial({ color: 0x5d6b4e }));
+    lid.position.y = 0.71;
+    const strap = new THREE.Mesh(new THREE.BoxGeometry(0.94, 0.09, 0.1),
+      new THREE.MeshLambertMaterial({ color: 0x2e352a }));
+    strap.position.y = 0.45;
+    const glow = new THREE.Mesh(new THREE.BoxGeometry(0.97, 0.02, 0.82),
+      new THREE.MeshBasicMaterial({ color: 0xffe9a0, transparent: true, opacity: 0.7 }));
+    glow.position.y = 0.72;
+    g.add(body, lid, strap, glow);
+    g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    scene.add(g);
+    crateMeshes.push(g);
     return g;
   }
   function updateCrates(list) {
-    const seen = new Set();
+    let idx = 0;
     list.forEach(c => {
-      const [id, x, y, z] = c;
-      seen.add(id);
-      const g = ensureCrate(id);
+      let g = crateMeshes[idx];
+      if (!g) g = buildCrateModel();
       g.visible = true;
-      g.position.set(x, y, z);
-      g.rotation.y = (performance.now() / 800 + id) % (Math.PI * 2) * 0; // 静止
+      g.position.set(c[1], c[2], c[3]);
+      idx++;
     });
-    for (const [id, g] of crateMeshes) {
-      if (!seen.has(id)) { g.visible = false; }
+    for (; idx < crateMeshes.length; idx++) crateMeshes[idx].visible = false;
+    // 池上限 12：超出销毁（防长时间对局累积）
+    while (crateMeshes.length > 12) {
+      const g2 = crateMeshes.pop();
+      scene.remove(g2);
+      g2.traverse(o => { if (o.material) o.material.dispose(); if (o.geometry) o.geometry.dispose(); });
     }
   }
-  function _debugCrates() { return crateMeshes.size; }
+  function _debugCrates() { return crateMeshes.filter(g => g.visible).length; }
 
   // ---------- 烟雾弹烟团 ----------
   const smokePool = [];
@@ -644,15 +644,33 @@ const Render = (function () {
 
   // ---------- 玩家模型 ----------
   const thirdGunCache = new Map(); // weaponId -> Group（第三人称武器模型缓存）
+  // 枪械材质只创建一次（修复：原实现每把枪新建 4 个带纹理材质 → 100+ 纹理）
+  const GUN_TDARK = new THREE.MeshLambertMaterial({ map: gunMetalTexture(), color: 0x9aa0aa });
+  const GUN_TMETAL = new THREE.MeshLambertMaterial({ map: gunMetalTexture(), color: 0xc2c8d0 });
+  const GUN_TPOLY = new THREE.MeshLambertMaterial({ color: 0x23262b });
+  const GUN_TWOOD = new THREE.MeshLambertMaterial({ map: gunWoodTexture(), color: 0xc8a070 });
+  // 人物布料纹理按阵营缓存（修复：每个玩家模型新建 3 张纹理）
+  const clothTexCache = new Map();
+  const vestTexCache = new Map();
+  function teamCloth(hex) {
+    let t = clothTexCache.get(hex);
+    if (!t) { t = clothTexture(hex); clothTexCache.set(hex, t); }
+    return t;
+  }
+  function teamVest(hex) {
+    let t = vestTexCache.get(hex);
+    if (!t) { t = vestTexture(hex); vestTexCache.set(hex, t); }
+    return t;
+  }
 
   function buildThirdGun(id) {
     if (!id) return null;
     if (thirdGunCache.has(id)) return thirdGunCache.get(id);
     const g = new THREE.Group();
-    const tDark = new THREE.MeshLambertMaterial({ map: gunMetalTexture(), color: 0x9aa0aa });
-    const tMetal = new THREE.MeshLambertMaterial({ map: gunMetalTexture(), color: 0xc2c8d0 });
-    const tPoly = new THREE.MeshLambertMaterial({ color: 0x23262b });
-    const tWood = new THREE.MeshLambertMaterial({ map: gunWoodTexture(), color: 0xc8a070 });
+    const tDark = GUN_TDARK;
+    const tMetal = GUN_TMETAL;
+    const tPoly = GUN_TPOLY;
+    const tWood = GUN_TWOOD;
     const b = (w, h, d, mat, x, y, z) => {
       const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
       m.position.set(x, y, z);
@@ -830,9 +848,9 @@ const Render = (function () {
     const teamCol = team === GAMECONST.TEAM_T ? 0xc87f3a : 0x4f78a4;
     const vestCol = team === GAMECONST.TEAM_T ? 0x8a5424 : 0x2f4a68;
     const pantsCol = team === GAMECONST.TEAM_T ? 0x4a4436 : 0x33445c;
-    const cloth = new THREE.MeshLambertMaterial({ map: clothTexture(team === GAMECONST.TEAM_T ? '#c87f3a' : '#4f78a4') });
-    const vest = new THREE.MeshLambertMaterial({ map: vestTexture(team === GAMECONST.TEAM_T ? '#8a5424' : '#2f4a68') });
-    const pants = new THREE.MeshLambertMaterial({ map: clothTexture(team === GAMECONST.TEAM_T ? '#4a4436' : '#33445c') });
+    const cloth = new THREE.MeshLambertMaterial({ map: teamCloth(team === GAMECONST.TEAM_T ? '#c87f3a' : '#4f78a4') });
+    const vest = new THREE.MeshLambertMaterial({ map: teamVest(team === GAMECONST.TEAM_T ? '#8a5424' : '#2f4a68') });
+    const pants = new THREE.MeshLambertMaterial({ map: teamCloth(team === GAMECONST.TEAM_T ? '#4a4436' : '#33445c') });
     const helmetM = new THREE.MeshLambertMaterial({ color: vestCol });
     const boots = new THREE.MeshLambertMaterial({ color: 0x26221e });
     const handM = new THREE.MeshLambertMaterial({ color: 0xc9926b });

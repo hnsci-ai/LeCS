@@ -48,8 +48,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     orig(loop);
   });
 
-  // 乱斗：把 bots 两两传到一起互打，观战者持续开火
-  for (let i = 0; i < 30; i++) {
+  // 乱斗：把 bots 两两传到一起互打，观战者持续开火（90 秒，检测渐进性能）
+  for (let i = 0; i < 90; i++) {
     if (i % 2 === 0) {
       ctl.send(JSON.stringify({ t: 'dev', cmd: 'tp', id: bots[0], x: -6, z: 2 }));
       ctl.send(JSON.stringify({ t: 'dev', cmd: 'tp', id: bots[1], x: 2, z: 2 }));
@@ -70,14 +70,19 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   }
 
   const stats = await page.evaluate(() => {
-    const f = window.__frames.slice(300); // 丢弃热身帧
-    f.sort((a, b) => a - b);
-    const avg = f.reduce((s, v) => s + v, 0) / f.length;
-    const p95 = f[Math.floor(f.length * 0.95)];
-    const max = f[f.length - 1];
-    return { avg: +avg.toFixed(1), p95: +p95.toFixed(1), max: +max.toFixed(1), fps: +(1000 / avg).toFixed(0) };
+    const all = window.__frames.slice(300);
+    const win = (a, b) => {
+      const seg = all.slice(a, b);
+      seg.sort((x, y) => x - y);
+      const avg = seg.reduce((s2, v) => s2 + v, 0) / seg.length;
+      return { avg: +avg.toFixed(1), max: +seg[seg.length - 1].toFixed(1) };
+    };
+    const third = Math.floor(all.length / 3);
+    return { w1: win(0, third), w2: win(third, third * 2), w3: win(third * 2, all.length) };
   });
-  console.log('  帧时间: 平均 ' + stats.avg + 'ms · P95 ' + stats.p95 + 'ms · 最大 ' + stats.max + 'ms · 平均FPS ' + stats.fps);
+  console.log('  帧时间(ms): 前段 平均 ' + stats.w1.avg + ' 最大 ' + stats.w1.max +
+    ' · 中段 平均 ' + stats.w2.avg + ' 最大 ' + stats.w2.max +
+    ' · 后段 平均 ' + stats.w3.avg + ' 最大 ' + stats.w3.max);
 
   ctl.close();
   await browser.close();
