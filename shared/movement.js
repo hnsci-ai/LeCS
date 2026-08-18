@@ -87,12 +87,24 @@
     var R = C.PLAYER_R;
     for (var i = 0; i < ws.length; i++) {
       var w = ws[i];
+      var stepable = w.y2 <= 1.1;
       // 低掩体可踩踏（跳上站顶）：顶面 ≤1.1m 的箱子/沙袋，脚部接近顶面时放行碰撞，
       // 跳起后越过顶面由 findSupport 接住；高箱子（>1.1m）仍然挡住
-      if (w.y2 <= 1.1 && p.y > w.y2 - 0.35) continue;
+      if (stepable && p.y > w.y2 - 0.35) continue;
       var x = axis === 'x' ? nv : p.x;
       var z = axis === 'z' ? nv : p.z;
-      if (overlaps(x, p.y, z, R, p.h, w)) return false;
+      if (overlaps(x, p.y, z, R, p.h, w)) {
+        // 脱困：跳跃落空卡进低掩体占地内时（贴地且在箱内），允许朝离开箱体的方向移动走出来
+        if (stepable && p.y < w.y2) {
+          const cx = (w.x1 + w.x2) / 2, cz = (w.z1 + w.z2) / 2;
+          if (axis === 'x') {
+            if (Math.abs(p.x - cx) < 0.01 || (p.x > cx ? nv > p.x : nv < p.x)) continue;
+          } else {
+            if (Math.abs(p.z - cz) < 0.01 || (p.z > cz ? nv > p.z : nv < p.z)) continue;
+          }
+        }
+        return false;
+      }
     }
     return true;
   }
@@ -103,7 +115,8 @@
     for (var i = 0; i < ws.length; i++) {
       var w = ws[i];
       if (p.x + R > w.x1 && p.x - R < w.x2 && p.z + R > w.z1 && p.z - R < w.z2) {
-        if (p.y >= w.y2 - 0.02 && ny >= w.y2 - 0.5 && ny <= w.y2 + 0.3) {
+        // 落顶吸附：下落中距顶面 0.25m 内即吸附站上（防止起跳高度刚好擦边时落进箱内卡住）
+        if (p.y >= w.y2 - 0.25 && ny >= w.y2 - 0.5 && ny <= w.y2 + 0.3) {
           if (best === null || w.y2 < best) best = w.y2;
         }
       }
