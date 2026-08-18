@@ -153,6 +153,31 @@ async function setup(gun) {
     check(hp >= 44 && hp <= 54, 'Glock 身体穿甲 ≈ 13/枪 → 4 枪约 48 ✓');
   }
 
+  // 8. 匕首伤害（加高版：挥砍 50 / 重刺 100）
+  {
+    const { a, b } = await setup('knife');
+    a.dev('tp', { x: -6, z: -2 });
+    b.dev('tp', { x: -4.6, z: -2 }); // 1.4m 贴身
+    await sleep(300);
+    // 左键挥砍：50 伤害 → 剩 50 血存活
+    a.send({ t: 'input', seq: ++a.seq, keys: { fire: true }, yaw: Math.atan2(-4, 0), pitch: 0, tClient: Date.now() });
+    await sleep(100);
+    a.send({ t: 'input', seq: ++a.seq, keys: {}, yaw: Math.atan2(-4, 0), pitch: 0, tClient: Date.now() });
+    await sleep(400);
+    const hp1 = b.me()[6], alive1 = b.me()[9];
+    console.log(`  匕首挥砍: hp=${hp1} 存活=${alive1}`);
+    check(alive1 === 1 && hp1 === 50, '左键挥砍 50 伤害（剩 50 血）');
+    await sleep(700); // 等刀的攻击冷却（~909ms）
+    // 右键重刺：100 伤害 → 击杀
+    a.send({ t: 'input', seq: ++a.seq, keys: { fireAlt: true }, yaw: Math.atan2(-4, 0), pitch: 0, tClient: Date.now() });
+    await sleep(100);
+    a.send({ t: 'input', seq: ++a.seq, keys: {}, yaw: Math.atan2(-4, 0), pitch: 0, tClient: Date.now() });
+    await sleep(500);
+    const alive2 = b.me()[9];
+    console.log(`  匕首重刺: 存活=${alive2}`);
+    check(alive2 === 0, '右键重刺 100 伤害 → 一刀击杀 ✓');
+  }
+
   console.log(failures === 0 ? '\n=== 伤害数值测试通过 ✓ ===' : `\n=== ${failures} 项失败 ✗ ===`);
   process.exit(failures === 0 ? 0 : 1);
 })().catch(e => { console.error('测试异常:', e.message); process.exit(1); });

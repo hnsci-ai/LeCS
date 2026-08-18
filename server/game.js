@@ -207,7 +207,10 @@ class Game {
     } else if (msg.cmd === 'give') {
       const def = W[msg.weapon];
       if (def) {
-        if (def.slot === 3) {
+        if (msg.weapon === 'knife') {
+          target.weapons[3] = { id: 'knife', mag: 1, reserve: 0 };
+          target.curSlot = 3;
+        } else if (def.slot === 3) {
           if (!target.grenades) target.grenades = [];
           if (!target.grenades.includes(msg.weapon)) target.grenades.push(msg.weapon);
           target.weapons[4] = { id: msg.weapon, mag: 1, reserve: 0 };
