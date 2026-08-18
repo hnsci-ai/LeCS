@@ -37,6 +37,7 @@ const HUD = (function () {
     el.scoreboard = $('scoreboard');
     el.sbTable = $('sb-table');
     el.sbRound = $('sb-round');
+    el.lootPrompt = $('loot-prompt');
     buildBuyMenu();
   }
 
@@ -319,9 +320,19 @@ const HUD = (function () {
 
   function setRoomCode(code) { el.roomCode.textContent = code || '----'; }
 
+  function updateLootPrompt(text) {
+    if (!el.lootPrompt) return;
+    if (text) {
+      el.lootPrompt.classList.remove('hidden');
+      el.lootPrompt.innerHTML = '按 <b>F</b> 舔包 — ' + esc(text);
+    } else {
+      el.lootPrompt.classList.add('hidden');
+    }
+  }
+
   return {
     init, updateGame, updateRadar, setKillfeed, showHit, showDamage,
     showMessage, showBanner, setRoomCode, showBuyMenu, refreshBuyMenu,
-    buyOpen, buyKey, showScoreboard
+    buyOpen, buyKey, showScoreboard, updateLootPrompt
   };
 })();

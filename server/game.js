@@ -53,6 +53,7 @@ class Game {
     this.smokes = [];    // 烟雾弹烟团 [{x,y,z,r,born,life,growUntil}]
     this.hostages = [];  // 人质营救模式 [{id,x,y,z,yaw,state:'idle'|'follow',leader}]
     this.rescued = 0;
+    this.crates = [];    // 死亡战利品箱 [{id,x,y,z,weapons,grenades,money}]
     this.shots = [];      // 本 tick 的枪声事件
     this.killfeed = [];   // 最近 6 条
     this.events = [];     // 待广播事件（每 tick 清空）
@@ -94,7 +95,7 @@ class Game {
       streak: 0,    // 连杀数
       nextFire: 0, reloadEnd: 0, reloading: false,
       in: { f: false, b: false, l: false, r: false, walk: false, crouch: false, jump: false, use: false, fire: false, fireAlt: false, reload: false, slot: 0 },
-      firePressed: false, fireAltPressed: false, fireWasDown: false,
+      firePressed: false, fireAltPressed: false, fireWasDown: false, lootPressed: false,
       scoped: 0, // AWP 开镜档位 0/1/2
       ackSeq: 0, latency: 0,
       planting: 0, plantX: 0, plantZ: 0, defusing: 0,
@@ -243,6 +244,7 @@ class Game {
       if (msg.keys.fire && !p.fireWasDown) p.firePressed = true;
       p.fireWasDown = !!msg.keys.fire;
       if (msg.keys.fireAlt) p.fireAltPressed = true;
+      if (msg.keys.loot) p.lootPressed = true;
       if (msg.keys.jump) inp.jump = true;
       if (msg.keys.reload) inp.reload = true;
     }
@@ -264,6 +266,7 @@ class Game {
     this.bomb = { state: C.BOMB_HIDDEN, carrier: null, x: 0, y: 0, z: 0, site: null, timeLeft: C.BOMB_TIME };
     this.nades = [];
     this.smokes = [];
+    this.crates = [];
     // 人质营救：刷新 4 名人质
     this.hostages = [];
     this.rescued = 0;
@@ -431,6 +434,45 @@ class Game {
         if (this.hostages.length === 0) this.endRound('ct', '人质全部获救');
       }
     }
+  }
+
+  // 舔包：靠近战利品箱按 F，取走武器/手雷/金钱（换下的武器留在箱内）
+  tryLoot(p) {
+    if (!p.alive) return;
+    let idx = -1;
+    for (let i = 0; i < this.crates.length; i++) {
+      if (Math.hypot(this.crates[i].x - p.x, this.crates[i].z - p.z) < 1.8) { idx = i; break; }
+    }
+    if (idx < 0) return;
+    const c = this.crates[idx];
+    const got = [];
+    if (c.weapons[1]) {
+      const w = c.weapons[1];
+      c.weapons[1] = p.weapons[1] || null;
+      p.weapons[1] = w;
+      got.push(W[w.id] ? W[w.id].name : w.id);
+    }
+    if (c.weapons[2]) {
+      const w = c.weapons[2];
+      c.weapons[2] = p.weapons[2] || null;
+      p.weapons[2] = w;
+      got.push(W[w.id] ? W[w.id].name : w.id);
+    }
+    if (!p.grenades) p.grenades = [];
+    for (const gid of c.grenades.slice()) {
+      if (p.grenades.length < 3 && !p.grenades.includes(gid)) {
+        p.grenades.push(gid);
+        c.grenades.splice(c.grenades.indexOf(gid), 1);
+        if (!p.weapons[4]) p.weapons[4] = { id: gid, mag: 1, reserve: 0 };
+        got.push(W[gid] ? W[gid].name : gid);
+      }
+    }
+    const cash = c.money;
+    this.addMoney(p, cash);
+    c.money = 0;
+    const empty = !c.weapons[1] && !c.weapons[2] && !c.grenades.length;
+    if (empty) this.crates.splice(idx, 1);
+    this.emitEvent({ type: 'loot', name: p.name, got: got.join('、'), money: cash });
   }
 
   // 人质交互：CT 按 E 带领人质
@@ -612,6 +654,7 @@ class Game {
     this.players.forEach(p => {
       if (!p.alive) { this.clearEdges(p); return; }
       const inp = p.in;
+      if (p.lootPressed) { this.tryLoot(p); p.lootPressed = false; }
       // 人质营救：按 E 带领人质
       if (inp.use && this.mode === 'hostage') this.tryLeadHostage(p);
       if (inp.slot) {
@@ -667,7 +710,7 @@ class Game {
 
   clearEdges(p) {
     p.in.jump = false; p.in.reload = false; p.in.slot = 0; p.in.fire = false; p.in.fireAlt = false;
-    p.firePressed = false; p.fireAltPressed = false;
+    p.firePressed = false; p.fireAltPressed = false; p.lootPressed = false;
   }
 
   startReload(p) {
@@ -874,6 +917,23 @@ class Game {
     victim.streak = 0;
     if (STREAK_MSGS[killer.streak] && !teamKill) {
       this.emitEvent({ type: 'streak', id: killer.id, name: killer.name, streak: killer.streak });
+    }
+    // 死亡掉落战利品箱（经典/人质模式，3 秒后尸体位置生成）
+    if ((this.mode === 'classic' || this.mode === 'hostage') && !teamKill) {
+      const crateWeapons = {};
+      if (victim.weapons[1]) { crateWeapons[1] = { id: victim.weapons[1].id, mag: victim.weapons[1].mag, reserve: victim.weapons[1].reserve }; }
+      if (victim.weapons[2]) { crateWeapons[2] = { id: victim.weapons[2].id, mag: victim.weapons[2].mag, reserve: victim.weapons[2].reserve }; }
+      const crateGrenades = (victim.grenades || []).slice();
+      const crateMoney = victim.money;
+      victim.money = 0;
+      victim.weapons = {};
+      const cx = victim.x, cz = victim.z;
+      const g = this;
+      setTimeout(() => {
+        if (g.phase === C.STATE_END || g.phase === C.STATE_FREEZE) return; // 回合已结束不再生成
+        g.crates.push({ id: NEXT_ID++, x: cx, y: 0, z: cz, weapons: crateWeapons, grenades: crateGrenades, money: crateMoney });
+        g.emitEvent({ type: 'crate', event: 'drop', x: +cx.toFixed(1), z: +cz.toFixed(1) });
+      }, 3000);
     }
     // 军备竞赛：击杀升级，匕首击杀降级对方，登顶夺冠
     if (this.mode === 'armsrace' && !teamKill) {
@@ -1190,6 +1250,9 @@ class Game {
       hostages: this.hostages.map(h => [h.id, +h.x.toFixed(1), 0, +h.z.toFixed(1), +h.yaw.toFixed(2), h.state === 'follow' ? 1 : 0, h.leader ? h.leader.id : 0]),
       rescued: this.rescued,
       armsLadder: ARMS_LADDER,
+      crates: this.crates.map(c => [c.id, +c.x.toFixed(1), 0, +c.z.toFixed(1),
+        c.weapons[1] ? c.weapons[1].id : '', c.weapons[2] ? c.weapons[2].id : '',
+        c.grenades.length, c.money]),
       shots: this.shots,
       killfeed: this.killfeed
     };

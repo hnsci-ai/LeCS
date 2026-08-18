@@ -19,6 +19,7 @@ const Input = (function () {
     Space: 'jump',
     KeyR: 'reload',
     KeyE: 'use',
+    KeyF: 'loot',
     KeyB: 'buymenu',
     Tab: 'scoreboard',
     Digit1: 'slot1', Digit2: 'slot2', Digit3: 'slot3', Digit4: 'slot4', Digit5: 'slot5',
@@ -103,7 +104,8 @@ const Input = (function () {
       use: !!keys.use,
       fire: fire,
       fireAlt: fa,
-      reload: takeEdge('reload')
+      reload: takeEdge('reload'),
+      loot: takeEdge('loot')
     };
   }
 

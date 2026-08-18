@@ -164,6 +164,11 @@ const Audio = (function () {
     tone(659, 0.09, 0.25, 'square', 0.1);
     tone(784, 0.16, 0.3, 'square', 0.2);
   }
+  function lootSound() {
+    tone(500, 0.06, 0.2, 'square');
+    tone(700, 0.06, 0.2, 'square', 0.07);
+    tone(1000, 0.09, 0.22, 'sine', 0.14);
+  }
   function rescueSound() {
     tone(660, 0.08, 0.22, 'sine');
     tone(880, 0.12, 0.24, 'sine', 0.08);
@@ -183,7 +188,7 @@ const Audio = (function () {
   return {
     ensure, resume, gunshot, footsteps, reload, hit, hurt, explosion,
     bombBeep, roundEnd, roundStart, plantSound, throwSound, bounceSound, buySound, denySound, emptyClick, scopeSound,
-    knifeSwing, flashSound, smokeSound, streakSound, rescueSound,
+    knifeSwing, flashSound, smokeSound, streakSound, rescueSound, lootSound,
     // 测试辅助
     _debugState: () => ({ created: !!ctx, state: ctx ? ctx.state : 'none', plays })
   };

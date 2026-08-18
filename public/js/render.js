@@ -317,6 +317,47 @@ const Render = (function () {
     }
   }
 
+  // ---------- 战利品箱（舔包） ----------
+  const crateMeshes = new Map(); // id -> group
+  function ensureCrate(id) {
+    let g = crateMeshes.get(id);
+    if (!g) {
+      g = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.65, 0.75),
+        new THREE.MeshLambertMaterial({ color: 0x4a5540 }));
+      body.position.y = 0.33;
+      const lid = new THREE.Mesh(new THREE.BoxGeometry(0.94, 0.1, 0.79),
+        new THREE.MeshLambertMaterial({ color: 0x5d6b4e }));
+      lid.position.y = 0.71;
+      const strap = new THREE.Mesh(new THREE.BoxGeometry(0.94, 0.09, 0.1),
+        new THREE.MeshLambertMaterial({ color: 0x2e352a }));
+      strap.position.y = 0.45;
+      const glow = new THREE.Mesh(new THREE.BoxGeometry(0.97, 0.02, 0.82),
+        new THREE.MeshBasicMaterial({ color: 0xffe9a0, transparent: true, opacity: 0.7 }));
+      glow.position.y = 0.72;
+      g.add(body, lid, strap, glow);
+      g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      scene.add(g);
+      crateMeshes.set(id, g);
+    }
+    return g;
+  }
+  function updateCrates(list) {
+    const seen = new Set();
+    list.forEach(c => {
+      const [id, x, y, z] = c;
+      seen.add(id);
+      const g = ensureCrate(id);
+      g.visible = true;
+      g.position.set(x, y, z);
+      g.rotation.y = (performance.now() / 800 + id) % (Math.PI * 2) * 0; // 静止
+    });
+    for (const [id, g] of crateMeshes) {
+      if (!seen.has(id)) { g.visible = false; }
+    }
+  }
+  function _debugCrates() { return crateMeshes.size; }
+
   // ---------- 烟雾弹烟团 ----------
   const smokePool = [];
   let smokeTex = null;
@@ -713,10 +754,8 @@ const Render = (function () {
         g.userData.armR.rotation.x = swing * 0.4;
       } else {
         if (m.wasAlive) {
-          // 死亡瞬间：血雾爆发 + 地面血泊 + 布娃娃尸体
+          // 死亡：布娃娃尸体（无血雾，几秒后沉没并变为战利品箱）
           m.wasAlive = false;
-          spawnBurst(p.x, p.y + 1.1, p.z, { count: 16, color: 0xb81f1f, size: 0.09, speed: 3.8, life: 0.6 });
-          bloodGround(p.x, p.z);
           Ragdoll.spawn(p.id, p.x, p.y, p.z, p.yaw, p.team);
         }
         g.visible = false; // 尸体由布娃娃物理呈现
@@ -985,7 +1024,7 @@ const Render = (function () {
   function getCamera() { return camera; }
 
   return {
-    init, renderFrame, updatePlayers, tracer, impact, muzzleFlash, shell, flashAt, explosion, getCamera, updateNades, updateSmokes, updateHostages,
+    init, renderFrame, updatePlayers, tracer, impact, muzzleFlash, shell, flashAt, explosion, getCamera, updateNades, updateSmokes, updateHostages, updateCrates, _debugCrates,
     // 测试辅助
     _debugTracerTotal: () => _tracerTotal,
     _debugTracerActive: () => tracerPool.filter(t => t.life > 0).length,

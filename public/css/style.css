@@ -197,6 +197,15 @@ input, select, button { font-family: inherit; }
 #progress-bar::after { content: ""; display: block; height: 100%; width: var(--p, 0%); background: #ffce45; transition: width .1s linear; }
 #progress-label { text-align: center; font-size: 13px; margin-top: 5px; color: #ffe9b0; text-shadow: 0 1px 3px #000; }
 
+/* 舔包提示 */
+#loot-prompt {
+  position: absolute; left: 50%; bottom: 30%; transform: translateX(-50%);
+  padding: 8px 22px; background: rgba(12,16,10,.82);
+  border: 1px solid #6d7a3a; border-radius: 8px;
+  font-size: 15px; color: #e8e4a8; text-shadow: 0 1px 3px #000;
+}
+#loot-prompt b { color: #ffce45; }
+
 /* 死亡 */
 #death-screen {
   position: absolute; inset: 0; z-index: 20; pointer-events: none;

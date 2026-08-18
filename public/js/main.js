@@ -252,6 +252,7 @@ const Main = (function () {
     if (snap.nades) Render.updateNades(snap.nades);
     Render.updateSmokes(snap.smokes || []);
     Render.updateHostages(snap.hostages || []);
+    Render.updateCrates(snap.crates || []);
 
     HUD.setKillfeed(snap.killfeed);
 
@@ -316,7 +317,7 @@ const Main = (function () {
     // 发送输入
     send({
       t: 'input', seq: S.seq,
-      keys: { f: inp.f, b: inp.b, l: inp.l, r: inp.r, walk: inp.walk, crouch: inp.crouch, jump: inp.jump, use: inp.use, fire: inp.fire, fireAlt: inp.fireAlt, reload: inp.reload },
+      keys: { f: inp.f, b: inp.b, l: inp.l, r: inp.r, walk: inp.walk, crouch: inp.crouch, jump: inp.jump, use: inp.use, fire: inp.fire, fireAlt: inp.fireAlt, reload: inp.reload, loot: inp.loot },
       yaw: S.sim.yaw, pitch: S.sim.pitch,
       slot: S.slotBuf || undefined,
       tClient: performance.now() + S.clockOffset
@@ -444,6 +445,13 @@ const Main = (function () {
         HUD.showMessage('🔥 ' + ev.name + ' ' + (ev.streak === 3 ? '3连杀' : ev.streak === 5 ? '5连杀 · 势不可挡' : '7连杀 · 无人能挡') + '！', '#ffb347');
         if (ev.streak >= 5) HUD.showBanner((ev.streak === 5 ? '势不可挡！' : '无人能挡！'), 't');
         Audio.streakSound();
+        break;
+      case 'loot':
+        HUD.showMessage('🎁 ' + ev.name + ' 舔包：' + (ev.got || '') + (ev.money ? ' · $' + ev.money : ''), '#e8e4a8');
+        Audio.lootSound();
+        break;
+      case 'crate':
+        if (ev.event === 'drop') HUD.showMessage('📦 阵亡者掉落战利品箱', '#c8d0b8');
         break;
       case 'armswin':
         HUD.showBanner('🔫 ' + ev.name + ' 夺得枪王！', 'ct');
@@ -608,6 +616,25 @@ const Main = (function () {
       armsLadder: snap ? snap.armsLadder : null
     });
     if (HUD.buyOpen()) HUD.refreshBuyMenu(dispMe, canBuy());
+    // 舔包提示：附近 2.5 米内有战利品箱时显示
+    {
+      let prompt = null;
+      if (snap && snap.crates && S.sim && me && me[9] === 1) {
+        for (const c of snap.crates) {
+          const d = Math.hypot(c[1] - S.sim.x, c[3] - S.sim.z);
+          if (d < 2.5) {
+            const parts = [];
+            if (c[4]) parts.push(WEAPONS.W[c[4]] ? WEAPONS.W[c[4]].name : c[4]);
+            if (c[5]) parts.push(WEAPONS.W[c[5]] ? WEAPONS.W[c[5]].name : c[5]);
+            if (c[6] > 0) parts.push('手雷×' + c[6]);
+            if (c[7] > 0) parts.push('$' + c[7]);
+            prompt = parts.join(' · ');
+            break;
+          }
+        }
+      }
+      HUD.updateLootPrompt(prompt);
+    }
     if (S.sim) {
       HUD.updateRadar(
         { x: S.sim.x, z: S.sim.z }, S.sim.yaw,
