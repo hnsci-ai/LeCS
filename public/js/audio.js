@@ -70,7 +70,22 @@ const Audio = (function () {
     ak47: { freq: 420, dur: 0.14, vol: 0.9 },
     m4a1: { freq: 750, dur: 0.1, vol: 0.7 },
     awp: { freq: 300, dur: 0.28, vol: 1.0 },
-    knife: { freq: 1600, dur: 0.06, vol: 0.2, type: 'highpass' }
+    knife: { freq: 1600, dur: 0.06, vol: 0.2, type: 'highpass' },
+    p228: { freq: 820, dur: 0.09, vol: 0.5 },
+    fiveseven: { freq: 860, dur: 0.08, vol: 0.48 },
+    elites: { freq: 950, dur: 0.08, vol: 0.55 },
+    tmp: { freq: 1300, dur: 0.06, vol: 0.35 },
+    mac10: { freq: 720, dur: 0.08, vol: 0.55 },
+    ump45: { freq: 620, dur: 0.09, vol: 0.6 },
+    p90: { freq: 1050, dur: 0.07, vol: 0.5 },
+    galil: { freq: 460, dur: 0.12, vol: 0.8 },
+    famas: { freq: 800, dur: 0.09, vol: 0.7 },
+    sg552: { freq: 700, dur: 0.1, vol: 0.75 },
+    aug: { freq: 750, dur: 0.1, vol: 0.7 },
+    scout: { freq: 380, dur: 0.2, vol: 0.8 },
+    g3sg1: { freq: 340, dur: 0.22, vol: 0.9 },
+    sg550: { freq: 350, dur: 0.22, vol: 0.85 },
+    m249: { freq: 300, dur: 0.13, vol: 0.9 }
   };
   function gunshot(weapon, distant) {
     if (!ctx) return;

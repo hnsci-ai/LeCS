@@ -189,11 +189,13 @@ class BotBrain {
     const p = this.bot;
     const g = this.game;
     const tryBuy = (id) => { if (g.validateBuy(p, id).ok) g.applyBuy(p, id); };
-    const rifle = p.team === C.TEAM_T ? 'ak47' : 'm4a1';
+    const rifles = p.team === C.TEAM_T ? ['ak47', 'galil', 'sg552'] : ['m4a1', 'famas', 'aug'];
+    const smgs = ['mp5', 'ump45', 'p90'];
+    const rifle = rifles[Math.floor(Math.random() * rifles.length)];
     tryBuy('kevlar');
     tryBuy('helmet');
     if (p.money >= 2500) tryBuy(rifle);
-    else if (p.money >= 1500) tryBuy('mp5');
+    else if (p.money >= 1500) tryBuy(smgs[Math.floor(Math.random() * smgs.length)]);
     if (p.team === C.TEAM_CT && p.money >= 200) tryBuy('defuse');
     if (p.money >= 300 && !p.weapons[4]) tryBuy('hegrenade');
     tryBuy('ammo');

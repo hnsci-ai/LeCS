@@ -329,8 +329,10 @@ const Main = (function () {
     const def = wid && WEAPONS.W[wid];
     // 右键：AWP 开镜 / 刀重击（本地即时反馈，服务器权威确认）
     if (inp.fireAlt) {
-      if (wid === 'awp') {
-        S.scoped = (S.scoped + 1) % 3;
+      const sdef = wid && WEAPONS.W[wid];
+      if (wid === 'awp' || (sdef && sdef.scopeLevels)) {
+        const levels = sdef && sdef.scopeLevels === 1 ? 1 : 2;
+        S.scoped = levels === 1 ? (S.scoped ? 0 : 1) : (S.scoped + 1) % 3;
         Audio.scopeSound(S.scoped > 0);
       } else if (wid === 'knife' && performance.now() >= S.localNextFire) {
         S.localNextFire = performance.now() + 600;
@@ -559,13 +561,17 @@ const Main = (function () {
     }
     const effScoped = (me && me[9] === 1) ? (S.scoped > 0) : !!(specT && specT.scoped > 0);
     const effScopedLv = (me && me[9] === 1) ? S.scoped : (specT ? specT.scoped : 0);
+    const effWeapon = (me && me[9] === 1) ? (VM.weaponId() || '') : (specT ? specT.weapon : '');
+    const effWdef = WEAPONS.W[effWeapon];
 
-    // AWP 开镜：FOV 平滑变焦 + 灵敏度缩放 + 隐藏持枪模型
-    const targetFov = !effScoped ? 75 : (effScopedLv === 1 ? 32 : 15);
+    // 开镜：FOV 平滑变焦（按武器镜档）+ 灵敏度缩放 + 隐藏持枪模型
+    const scopeFovs = (effWdef && effWdef.scopeFov) ? effWdef.scopeFov : [32, 15];
+    const targetFov = !effScoped ? 75 : scopeFovs[Math.min(effScopedLv - 1, scopeFovs.length - 1)];
     const cam = Render.getCamera();
     cam.fov += (targetFov - cam.fov) * Math.min(1, dtReal * 11);
     cam.updateProjectionMatrix();
-    Input.setSensScale(!effScoped ? 1 : (effScopedLv === 1 ? 0.55 : 0.25));
+    const oneLevel = effWdef && effWdef.scopeLevels === 1;
+    Input.setSensScale(!effScoped ? 1 : (effScopedLv === 2 && !oneLevel ? 0.25 : 0.55));
     const showGun = me && ((me[9] === 1 && !me[28]) || (me[9] !== 1 && specT)) && !effScoped;
     VM.setVisible(!!showGun);
     VM.update(dtReal, {

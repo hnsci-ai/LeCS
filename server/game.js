@@ -642,7 +642,7 @@ class Game {
       if (p.fireAltPressed || inp.fireAlt) {
         // 右键：刀重击 / AWP 开镜切换；其他武器无动作（CS 风格）
         if (w.id === 'knife') this.fireWeapon(p, true);
-        else if (w.id === 'awp') this.toggleScope(p);
+        else if (w.id === 'awp' || (W[w.id] && W[w.id].scopeLevels)) this.toggleScope(p, W[w.id] ? W[w.id].scopeLevels : 2);
         p.fireAltPressed = false; inp.fireAlt = false;
         return;
       }
@@ -715,7 +715,9 @@ class Game {
     const jumpPen = p.onGround ? 0 : (def.spreadJump - def.spread);
     const bloom = Math.min(0.05, (Date.now() - (p.lastShot || 0) < 350 ? 0.012 : 0));
     let spread = def.spread + def.spreadMove * moveFrac + jumpPen + bloom + (p.in.crouch ? -0.003 : 0);
-    if (p.scoped > 0 && wid === 'awp') spread = 0.0004; // 开镜精度拉满
+    if (p.scoped > 0 && (wid === 'awp' || (def.scopeLevels && def.scopeSpread !== undefined))) {
+      spread = def.scopeSpread !== undefined ? def.scopeSpread : 0.0004; // 开镜精度拉满
+    }
     p.lastShot = Date.now();
     const dir = this.aimDir(p, Math.max(0.001, spread));
     const ox = p.x, oy = p.eye, oz = p.z;
@@ -781,9 +783,10 @@ class Game {
     return best;
   }
 
-  // AWP 开镜循环：0 关 → 1 一倍 → 2 二倍 → 0 关
-  toggleScope(p) {
-    p.scoped = (p.scoped + 1) % 3;
+  // 开镜循环：2 档镜 0→1→2→0；1 档镜（AUG/G3/SG550）0↔1
+  toggleScope(p, levels) {
+    if (levels === 1) p.scoped = p.scoped ? 0 : 1;
+    else p.scoped = (p.scoped + 1) % 3;
   }
 
   knifeAttack(p, alt) {
