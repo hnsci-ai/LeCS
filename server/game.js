@@ -887,7 +887,8 @@ class Game {
   knifeAttack(p, alt) {
     const now = Date.now();
     const dmg = alt ? W.knife.dmgAlt : W.knife.dmg;
-    p.nextFire = now + 1000 / W.knife.rate * (alt ? 1.4 : 1);
+    // 冷却不同：轻击快（rate 2.0 → 0.5 秒），重击慢（rateAlt 1.0 → 1 秒）
+    p.nextFire = now + 1000 / (alt ? W.knife.rateAlt : W.knife.rate);
     const dir = this.aimDir(p, 0.02);
     let best = null, bestD = W.knife.range;
     this.players.forEach(v => {
@@ -900,8 +901,10 @@ class Game {
       if (d < bestD) { bestD = d; best = v; }
     });
     if (best) {
-      this.shots.push([p.x, p.eye, p.z, 'knife', p.team, +p.yaw.toFixed(3)]);
-      this.applyDamage(best, p, W.knife, 1, bestD, 1, 'knife');
+      // 快照: [x,y,z,'knife',team,yaw,alt, 命中点x,y,z]（供客户端播血雾/命中声）
+      this.shots.push([p.x, p.eye, p.z, 'knife', p.team, +p.yaw.toFixed(3), alt ? 1 : 0,
+        +best.x.toFixed(1), +best.y.toFixed(1), +best.z.toFixed(1)]);
+      this.applyDamage(best, p, Object.assign({}, W.knife, { dmg: dmg }), 1, bestD, 1, 'knife');
     }
   }
 

@@ -387,7 +387,7 @@ const VM = (function () {
     const b = build(id);
     addHands(b.root, id);
     group.add(b.root);
-    cur = { weapon: id, root: b.root, tip: b.tip, kick: 0, bobPhase: 0, reloadT: 0, slash: 0, bolt: b.bolt, boltT: 0, boltBaseZ: b.bolt ? b.bolt.position.z : 0 };
+    cur = { weapon: id, root: b.root, tip: b.tip, kick: 0, bobPhase: 0, reloadT: 0, slash: 0, slashHeavy: false, bolt: b.bolt, boltT: 0, boltBaseZ: b.bolt ? b.bolt.position.z : 0 };
   }
 
   // 切枪：先下收旧枪，再上举新枪（约 0.3 秒）
@@ -401,9 +401,9 @@ const VM = (function () {
 
   function setVisible(v) { if (group) group.visible = v; }
 
-  function fire() {
+  function fire(alt) {
     if (!cur) return;
-    if (cur.weapon === 'knife') { cur.slash = 1; return; } // 匕首：挥砍，无火光
+    if (cur.weapon === 'knife') { cur.slash = 1; cur.slashHeavy = !!alt; return; } // 匕首：挥砍，无火光（轻/重不同动画）
     cur.kick = 1;
     if (cur.bolt) cur.boltT = 1; // 拉栓动画（AWP/Scout）
     // 枪口火光（星芒随机旋转/缩放 + 柔光）
@@ -488,15 +488,18 @@ const VM = (function () {
       group.rotation.set(0, 0, 0);
     }
 
-    // 匕首挥砍动画（斜劈弧线）
+    // 匕首挥砍动画（轻击快劈 / 重击高举下劈）
     if (cur.slash > 0) {
-      cur.slash -= dt * 5.5;
+      const spd = cur.slashHeavy ? 2.6 : 5.5;
+      cur.slash -= dt * spd;
       const sw = Math.sin(Math.max(0, cur.slash) * Math.PI);
-      cur.root.rotation.z = -sw * 1.15;
-      cur.root.rotation.y = sw * 0.55;
+      cur.root.rotation.z = -sw * (cur.slashHeavy ? 1.45 : 1.15);
+      cur.root.rotation.y = sw * (cur.slashHeavy ? 0.75 : 0.55);
+      cur.root.rotation.x = cur.slashHeavy ? -sw * 0.5 : 0;
     } else {
       cur.root.rotation.z = 0;
       cur.root.rotation.y = 0;
+      cur.root.rotation.x = 0;
     }
 
     // 硝烟漂移消散

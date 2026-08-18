@@ -271,8 +271,9 @@ const Main = (function () {
         const rel = S.sim ? Math.atan2(x - S.sim.x, z - S.sim.z) - S.sim.yaw : 0;
         const pan = Math.sin(rel);
         if (!own && wid === 'knife') {
-          // 匕首攻击：只有嗖声，无曳光/无火光
-          Audio.knifeSwing(true);
+          // 匕首攻击：嗖声（轻/重不同）+ 命中血雾，无曳光/无火光
+          Audio.knifeSwing(true, sh[6] === 1);
+          if (hx !== undefined) Render.impact(hx, hy, hz, 2);
         } else if (!own) {
           Audio.gunshot(wid, true, pan, d);
           // 3D 曳光轨迹：起点 → 服务器计算的真实命中点
@@ -289,6 +290,12 @@ const Main = (function () {
         } else if (hx !== undefined && (kind === 1 || kind === 2)) {
           // 自己的子弹：本地即时绘制曳光，服务器命中点补火花/血雾
           Render.impact(hx, hy, hz, kind);
+        }
+        // 自己的刀命中（服务器确认）：血雾 + 命中声；重击带轻微镜头震动
+        if (own && wid === 'knife' && hx !== undefined) {
+          Render.impact(hx, hy, hz, 2);
+          Audio.knifeHit(sh[6] === 1);
+          if (sh[6] === 1) S.recoilP = Math.min(0.09, S.recoilP + 0.012);
         }
         // 记录命中受害者的子弹方向（布娃娃死亡冲量用）
         if (kind === 2 && sh[11]) {
@@ -419,9 +426,10 @@ const Main = (function () {
         S.scoped = levels === 1 ? (S.scoped ? 0 : 1) : (S.scoped + 1) % 3;
         Audio.scopeSound(S.scoped > 0);
       } else if (wid === 'knife' && performance.now() >= S.localNextFire) {
-        S.localNextFire = performance.now() + 600;
-        Audio.knifeSwing(false);
-        VM.fire();
+        // 右键刀重击：本地即时反馈（慢而重，冷却 1 秒）
+        S.localNextFire = performance.now() + 1000;
+        Audio.knifeSwing(false, true);
+        VM.fire(true);
       }
     }
     // 左键开火

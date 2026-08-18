@@ -198,10 +198,20 @@ const Audio = (function () {
     burst({ freq: inOut ? 3200 : 2600, dur: 0.045, vol: 0.3, type: 'highpass' });
     burst({ freq: 900, dur: 0.05, vol: 0.15, type: 'lowpass' });
   }
-  function knifeSwing(distant) {
-    // 匕首挥砍嗖声
-    burst({ freq: 2600, dur: 0.09, vol: distant ? 0.12 : 0.32, type: 'bandpass' });
-    tone(1100, 0.08, distant ? 0.08 : 0.18, 'sine', 0, 3200);
+  function knifeSwing(distant, heavy) {
+    // 匕首挥砍嗖声：轻击短促高频，重击低沉有力
+    if (heavy) {
+      burst({ freq: 700, dur: 0.16, vol: distant ? 0.16 : 0.4, type: 'bandpass' });
+      tone(300, 0.15, distant ? 0.1 : 0.22, 'sine', 0, 1400);
+    } else {
+      burst({ freq: 2600, dur: 0.09, vol: distant ? 0.12 : 0.32, type: 'bandpass' });
+      tone(1100, 0.08, distant ? 0.08 : 0.18, 'sine', 0, 3200);
+    }
+  }
+  function knifeHit(heavy) {
+    // 刀命中肉体声：轻击短促、重击闷响
+    burst({ freq: heavy ? 500 : 900, dur: heavy ? 0.09 : 0.06, vol: 0.35, type: 'lowpass' });
+    tone(heavy ? 180 : 260, heavy ? 0.12 : 0.07, 0.3, 'sine', 0, heavy ? 90 : 140);
   }
   function streakSound() {
     tone(523, 0.09, 0.25, 'square');
@@ -232,7 +242,7 @@ const Audio = (function () {
   return {
     ensure, resume, gunshot, footsteps, reload, hit, hurt, explosion,
     bombBeep, roundEnd, roundStart, plantSound, throwSound, bounceSound, buySound, denySound, emptyClick, scopeSound,
-    knifeSwing, flashSound, smokeSound, streakSound, rescueSound, lootSound, footstepDistant, land, shellTink, nadeBounce, startWind,
+    knifeSwing, knifeHit, flashSound, smokeSound, streakSound, rescueSound, lootSound, footstepDistant, land, shellTink, nadeBounce, startWind,
     // 测试辅助
     _debugState: () => ({ created: !!ctx, state: ctx ? ctx.state : 'none', plays })
   };
