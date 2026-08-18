@@ -604,7 +604,8 @@ const Main = (function () {
       mode: snap ? snap.mode : S.mode,
       bomb: snap ? snap.bomb : null,
       hostages: snap ? snap.hostages : null,
-      rescued: snap ? snap.rescued : 0
+      rescued: snap ? snap.rescued : 0,
+      armsLadder: snap ? snap.armsLadder : null
     });
     if (HUD.buyOpen()) HUD.refreshBuyMenu(dispMe, canBuy());
     if (S.sim) {

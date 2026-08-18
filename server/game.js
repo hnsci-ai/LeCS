@@ -12,7 +12,13 @@ let NEXT_ID = 1;
 function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
 
 // 军备竞赛（枪王）武器阶梯：从匕首一路杀到最终刀战
-const ARMS_LADDER = ['knife', 'glock', 'usp', 'deagle', 'mp5', 'ak47', 'm4a1', 'awp', 'hegrenade', 'knife'];
+const ARMS_LADDER = [
+  'knife', 'glock', 'usp', 'p228', 'fiveseven', 'deagle', 'elites',   // 手枪段
+  'tmp', 'mac10', 'mp5', 'ump45', 'p90',                             // 冲锋枪段
+  'galil', 'famas', 'ak47', 'm4a1', 'sg552', 'aug',                  // 步枪段
+  'scout', 'sg550', 'g3sg1', 'awp', 'm249',                          // 狙击/机枪段
+  'hegrenade', 'knife'                                               // 手雷 → 最终刀战
+];
 const STREAK_MSGS = { 3: '3 连杀', 5: '5 连杀 · 势不可挡', 7: '7 连杀 · 无人能挡' };
 
 function angDiffWrap(a, b) {
@@ -1183,6 +1189,7 @@ class Game {
       smokes: this.smokes.map(s => [+s.x.toFixed(1), +s.y.toFixed(1), +s.z.toFixed(1), +s.r.toFixed(1)]),
       hostages: this.hostages.map(h => [h.id, +h.x.toFixed(1), 0, +h.z.toFixed(1), +h.yaw.toFixed(2), h.state === 'follow' ? 1 : 0, h.leader ? h.leader.id : 0]),
       rescued: this.rescued,
+      armsLadder: ARMS_LADDER,
       shots: this.shots,
       killfeed: this.killfeed
     };

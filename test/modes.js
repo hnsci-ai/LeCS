@@ -97,9 +97,9 @@ class Client {
   console.log('  击杀后等级:', lv1, '武器:', w1);
   check(lv1 === 1 && w1 === 'glock', '击杀升级 → Glock ✓');
 
-  // 连续击杀 8 次（每次等对方复活）→ 登顶（等级 9 最终刀战）→ 夺冠重置
-  let winSeen = false;
-  for (let i = 0; i < 8 && !winSeen; i++) {
+  // 连续击杀直至登顶（25 级阶梯，最终刀战在 24 级）→ 夺冠重置
+  let winSeen = false, tmpSeen = false;
+  for (let i = 0; i < 30 && !winSeen; i++) {
     // 等待 d 复活（军备竞赛 2 秒复活）
     for (let k = 0; k < 30; k++) {
       const de = d.me();
@@ -108,9 +108,16 @@ class Client {
     }
     c.dev('dmg', { id: d.id, amount: 1000 });
     await sleep(600);
+    // 第 8 杀后应是 MAC-10（新枪已入阶梯）
+    if (i === 6) {
+      const w7 = c.me()[10], lv7 = c.me()[30];
+      console.log('  第8级:', lv7, w7);
+      if (lv7 === 8 && w7 === 'mac10') tmpSeen = true;
+    }
     if (c.events.some(e => e.type === 'armswin')) winSeen = true;
   }
-  check(winSeen, '连续升级后触发夺冠（armswin 事件）');
+  check(tmpSeen, '新枪已入阶梯（第 9 把为 MAC-10）✓ 关键修复');
+  check(winSeen, '杀穿 25 级后触发夺冠（armswin 事件）');
   await sleep(800);
   const lvReset = c.me()[30];
   check(lvReset === 0, '夺冠后全员重置回匕首（等级 ' + lvReset + '）✓');

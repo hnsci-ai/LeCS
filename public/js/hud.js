@@ -192,9 +192,14 @@ const HUD = (function () {
       el.phase.textContent = '人质 ' + (ui.rescued || 0) + '/4 · ' + teamTxt;
     } else if (ui.phase === 'live' && ui.mode === 'armsrace' && ui.my) {
       const lv = ui.my[30] || 0;
-      const ladder = ['匕首', 'Glock', 'USP', '沙鹰', 'MP5', 'AK-47', 'M4A1', 'AWP', '手雷', '最终刀战'];
-      const cur = WEAPONS.W[ui.my[10]] ? WEAPONS.W[ui.my[10]].name : ladder[lv];
-      el.phase.textContent = lv >= 9 ? '🔪 最终刀战！击杀即夺冠' : '军备竞赛 ' + (lv + 1) + '/9 · 当前: ' + cur + ' · 下一把: ' + (ladder[lv + 1] || '冠军');
+      const ladder = (ui.armsLadder || []).map(id => id === 'knife' ? '最终刀战' : (WEAPONS.W[id] ? WEAPONS.W[id].name : id));
+      if (!ladder.length) { el.phase.textContent = '军备竞赛'; }
+      else if (lv >= ladder.length - 1) {
+        el.phase.textContent = '🔪 最终刀战！击杀即夺冠';
+      } else {
+        const cur = WEAPONS.W[ui.my[10]] ? WEAPONS.W[ui.my[10]].name : ladder[lv];
+        el.phase.textContent = '军备竞赛 ' + (lv + 1) + '/' + ladder.length + ' · 当前: ' + cur + ' · 下一把: ' + (ladder[lv + 1] || '冠军');
+      }
     }
     else el.phase.textContent = ui.my ? (ui.my[8] === 0 ? '你是恐怖分子 T' : '你是反恐精英 CT') : '';
     el.phase.style.display = el.phase.textContent ? '' : 'none';
