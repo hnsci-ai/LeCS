@@ -504,6 +504,7 @@ const Main = (function () {
         if (ev.event === 'start') {
           HUD.showBanner('第 ' + ev.round + ' 回合', 'ct');
           Audio.roundStart();
+          Ragdoll.clearAll(); // 每个回合开始清除场上尸体
         } else if (ev.event === 'live') {
           HUD.showBanner('行动开始！', 'ct');
           Audio.roundStart();

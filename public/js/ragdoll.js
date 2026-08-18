@@ -198,7 +198,7 @@ const Ragdoll = (function () {
   }
 
   function removeRagdoll(r) {
-    active.delete(r.id);
+    active.delete(r.key || r.id); // 用唯一 key 删除（尸体永久保留机制下 key = id#序号）
     if (r.timer) clearTimeout(r.timer);
     for (const b of r.bodies) world.removeBody(b);
     for (const c of r.constraints) world.removeConstraint(c);

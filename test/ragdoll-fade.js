@@ -12,17 +12,19 @@ function check(cond, msg) { if (cond) console.log('  ✓ ' + msg); else { failur
 
 (async () => {
   const ctl = new WebSocket('ws://127.0.0.1:8082');
-  let code = '', botId = 0;
+  let code = '', botId = 0, botIds = [];
   let rb; const botReady = new Promise(r => { rb = r; });
   ctl.on('message', raw => {
     const m = JSON.parse(raw.toString());
     if (m.t === 'joined') code = m.code;
-    if (m.t === 'roster') { const bot = m.players.find(p => p.bot); if (bot && !botId) { botId = bot.id; rb(); } }
+    if (m.t === 'roster') {
+      const bots = m.players.filter(p => p.bot);
+      botIds = bots.map(p => p.id);
+      if (bots.length >= 2 && !botId) { botId = botIds[0]; rb(); } // 两名 CT Bot：击杀其一不会结束回合
+    }
   });
   await new Promise(res => ctl.on('open', () => { ctl.send(JSON.stringify({ t: 'join', name: 'ctl', team: 't', mode: 'classic' })); res(); }));
   await sleep(500);
-  ctl.send(JSON.stringify({ t: 'addbot', diff: 'normal' }));
-  await botReady;
 
   const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: ['--no-sandbox', '--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
@@ -30,12 +32,18 @@ function check(cond, msg) { if (cond) console.log('  ✓ ' + msg); else { failur
   page.on('pageerror', e => errors.push(String(e)));
   await page.goto('http://127.0.0.1:8082', { waitUntil: 'networkidle' });
   await page.fill('#nick', '观尸');
+  await page.selectOption('#team', 't'); // 与 ctl 同队：CT 只剩两个 Bot，杀光即可结束回合
   await page.fill('#code', code);
   await page.click('#btn-join');
   await page.waitForSelector('#game:not(.hidden)', { timeout: 8000 });
   await page.evaluate(() => window.__lecsSend({ t: 'dev', cmd: 'god' }));
+  // 冻结期内立刻加两个 Bot（经典模式中途加入会变成观战者，必须趁冻结期加）：
+  // 页面(T)已入房 → 双方人数均衡 → 两个 Bot 都进 CT，杀其一不会结束回合
+  ctl.send(JSON.stringify({ t: 'addbot', diff: 'normal' }));
+  ctl.send(JSON.stringify({ t: 'addbot', diff: 'normal' }));
+  await botReady;
   await page.waitForFunction(() => window.__lecsLastSnap && window.__lecsLastSnap.phase === 'live', null, { timeout: 30000 });
-  await sleep(1000);
+  await sleep(800);
 
   console.log('== 1. 经典模式尸体永久保留 ==');
   ctl.send(JSON.stringify({ t: 'dev', cmd: 'armor', id: botId, armor: 1000, helmet: true })); // 致命一击会消耗护甲，调高保证死后仍有剩余
@@ -59,6 +67,16 @@ function check(cond, msg) { if (cond) console.log('  ✓ ' + msg); else { failur
   const n2 = await page.evaluate(() => Ragdoll._debugCount());
   console.log('  堆叠后尸体数:', n2);
   check(n2 === 2, '同一目标再次死亡堆叠第二具尸体');
+
+  console.log('== 3. 每个回合开始清除尸体 ==');
+  // 击杀全部 CT → 回合结束 → 新回合开始时清场
+  for (const id of botIds) ctl.send(JSON.stringify({ t: 'dev', cmd: 'dmg', id, amount: 1000 }));
+  await sleep(1500);
+  console.log('  击杀后 phase:', await page.evaluate(() => window.__lecsLastSnap.phase), 'round:', await page.evaluate(() => window.__lecsLastSnap.round));
+  await sleep(6000); // 回合结束展示 5 秒 → 新回合开始
+  const n3 = await page.evaluate(() => Ragdoll._debugCount());
+  console.log('  新回合开始后尸体数:', n3, '· phase:', await page.evaluate(() => window.__lecsLastSnap.phase), 'round:', await page.evaluate(() => window.__lecsLastSnap.round));
+  check(n3 === 0, '新回合开始后场上尸体全部清除');
 
   check(errors.length === 0, '无 JS 错误' + (errors.length ? ': ' + errors[0].slice(0, 150) : ''));
 
