@@ -66,7 +66,8 @@ function check(cond, msg) { if (cond) console.log('  ✓ ' + msg); else { failur
   console.log('  60 秒乱斗后残留尸体数:', finalCorpses);
   console.log('  Ragdoll 异常日志数:', warns.filter(w => w.includes('Ragdoll')).length);
   warns.filter(w => w.includes('Ragdoll')).slice(0, 3).forEach(w => console.log('  异常:', w.slice(0, 300)));
-  check(finalCorpses === 0, '乱斗结束后无残留尸体');
+  check(finalCorpses >= 1, '乱斗产生并保留尸体（全模式永久）');
+  check(finalCorpses <= 60, '尸体数不超过上限 60（当前 ' + finalCorpses + '）');
   check(errors.length === 0, '无页面错误');
 
   ctl.close();

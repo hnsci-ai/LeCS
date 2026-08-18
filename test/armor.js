@@ -79,7 +79,8 @@ function check(cond, msg) { if (cond) console.log('  ✓ ' + msg); else { failur
   await sleep(900);
   const ex2 = await page.evaluate(() => Ragdoll._debugExtras());
   console.log('  无甲尸体护甲部件数:', JSON.stringify(ex2));
-  check(ex2.length === 1 && ex2[0] === 0, '无护甲死亡，尸体不带护甲部件');
+  // 全模式统一：尸体永久保留，此时应有 2 具尸体（第 1 具带护甲 [2]，第 2 具无甲 [0]）
+  check(ex2.length === 2 && ex2[1] === 0, '无护甲死亡，新尸体不带护甲部件（旧尸体保留）');
 
   check(errors.length === 0, '全程无 JS 错误' + (errors.length ? ': ' + errors[0].slice(0, 150) : ''));
 

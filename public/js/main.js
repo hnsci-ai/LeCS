@@ -105,7 +105,6 @@ const Main = (function () {
           S.map = window.MAPS[m.map] ? m.map : 'dust';
           window.MAPDATA = window.MAPS[S.map];
         }
-        Ragdoll.setPersistent(S.mode === 'test'); // 测试靶场：Bot 尸体永久保留
         enterGame();
         if (S.pendingBots) {
           for (let i = 0; i < S.pendingBots; i++) send({ t: 'addbot', diff: S.botDiff });

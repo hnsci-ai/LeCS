@@ -66,12 +66,12 @@ function check(cond, msg) { if (cond) console.log('  ✓ ' + msg); else { failur
     check(false, '布娃娃状态读取失败');
   }
 
-  // 重生清除：复活 bot
+  // 复活不清理尸体（全模式统一：尸体永久保留）
   ctl.send(JSON.stringify({ t: 'dev', cmd: 'revive', id: botId }));
   await sleep(1500);
   const c2 = await page.evaluate(() => Ragdoll._debugCount());
   console.log('  复活后活跃布娃娃数:', c2);
-  check(c2 === 0, '玩家复活后旧尸体被清除');
+  check(c2 === 1, '玩家复活后旧尸体保留（永久）');
 
   // 稳定性：连续击杀 3 次
   let kills = 0;
