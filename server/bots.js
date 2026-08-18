@@ -303,12 +303,18 @@ class BotBrain {
     }
     if (!this.lastPos) { this.lastPos = { x: p.x, z: p.z }; this._lastStuckCheck = now; }
 
-    // 人质营救：靠近空闲人质按 E 带领
+    // 人质营救：靠近空闲人质按 E 带领（按 E 的同时继续贴近，避免停在判定距离外）
     if (this.game.mode === 'hostage' && p.team === C.TEAM_CT) {
       for (const h of this.game.hostages) {
         if (h.state !== 'idle') continue;
-        const d = Math.hypot(h.x - p.x, h.z - p.z);
-        if (d < 2.2) { inp.use = true; inp.f = inp.b = inp.l = inp.r = false; break; }
+        const dx = h.x - p.x, dz = h.z - p.z;
+        const d = Math.hypot(dx, dz);
+        if (d < 2.6) {
+          inp.use = true;
+          if (d > 1.0) this.moveToward(dx / d, dz / d);
+          else { inp.f = inp.b = inp.l = inp.r = false; }
+          break;
+        }
       }
     }
 

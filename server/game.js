@@ -433,7 +433,7 @@ class Game {
     for (const h of this.hostages) {
       if (h.state !== 'idle') continue;
       const d = Math.hypot(h.x - p.x, h.z - p.z);
-      if (d < 2.0) {
+      if (d < 2.2) {
         h.state = 'follow';
         h.leader = p;
         this.emitEvent({ type: 'hostage', event: 'follow', id: h.id, name: p.name });
