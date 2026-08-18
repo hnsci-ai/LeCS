@@ -25,6 +25,7 @@ const Main = (function () {
     inventory: {},          // slot -> weaponId（本地乐观切枪用）
     slotBuf: 0,
     joinState: 'idle',
+    lootCrateId: 0,          // 当前打开的舔包箱 id
     fpsAcc: 0, fpsN: 0, fpsHist: [], lowQuality: false,  // 帧率统计与自动画质档
     refreshEst: 60, calibUntil: 0, calibDone: false, manualQuality: null  // 刷新率校准 / F6 手动画质
   };
@@ -116,7 +117,7 @@ const Main = (function () {
   function updateLockUI() {
     const locked = Input.locked();
     const sbOpen = !document.getElementById('scoreboard').classList.contains('hidden');
-    document.getElementById('click-block').classList.toggle('hidden', locked || HUD.buyOpen() || sbOpen);
+    document.getElementById('click-block').classList.toggle('hidden', locked || HUD.buyOpen() || HUD.lootOpen() || sbOpen);
   }
 
   // 请求重新锁定鼠标；浏览器在 exitPointerLock 后有约 1.3s 冷却期，
@@ -129,7 +130,7 @@ const Main = (function () {
       p.catch(() => {
         if (!retried) {
           setTimeout(() => {
-            if (!Input.locked() && !HUD.buyOpen()) attemptRelock(true);
+            if (!Input.locked() && !HUD.buyOpen() && !HUD.lootOpen()) attemptRelock(true);
           }, 1300);
         }
         updateLockUI();
@@ -149,11 +150,39 @@ const Main = (function () {
     attemptRelock(false);
   }
 
+  // ---------- 舔包对话框 ----------
+  // 附近 2.5 米内最近的战利品箱（需存活）
+  function findNearCrate() {
+    const snap = S.lastSnap, me = myEntry(snap);
+    if (!snap || !snap.crates || !S.sim || !me || me[9] !== 1) return null;
+    for (const c of snap.crates) {
+      if (Math.hypot(c[1] - S.sim.x, c[3] - S.sim.z) < 2.5) return c;
+    }
+    return null;
+  }
+
+  function openLootMenuFor(c) {
+    S.lootCrateId = c[0];
+    HUD.openLootMenu(c);
+    HUD.updateLootPrompt(null);
+    if (HUD.buyOpen()) { HUD.showBuyMenu(false); updateLockUI(); } // 关购买菜单但不重锁鼠标
+    if (document.pointerLockElement) document.exitPointerLock();
+    updateLockUI();
+  }
+
+  function closeLootMenu() {
+    HUD.closeLootMenu();
+    S.lootCrateId = 0;
+    updateLockUI();
+    attemptRelock(false);
+  }
+
   function enterGame() {
     document.getElementById('lobby').classList.add('hidden');
     document.getElementById('game').classList.remove('hidden');
     document.getElementById('hud').classList.remove('hidden');
     HUD.init();
+    HUD.initLoot((item) => send({ t: 'loot', id: S.lootCrateId, item })); // 双击拾取
     HUD.setRoomCode(S.code);
     const canvas = document.getElementById('gl');
     Render.init(canvas);
@@ -169,10 +198,10 @@ const Main = (function () {
     document.getElementById('click-block').addEventListener('click', () => attemptRelock(false));
     // 兜底：未锁定时点击画布也可重新锁定
     canvas.addEventListener('click', () => {
-      if (!Input.locked() && !HUD.buyOpen()) attemptRelock(false);
+      if (!Input.locked() && !HUD.buyOpen() && !HUD.lootOpen()) attemptRelock(false);
     });
     document.addEventListener('pointerlockchange', () => {
-      if (!Input.locked() && !HUD.buyOpen()) Input.clearAll();
+      if (!Input.locked() && !HUD.buyOpen() && !HUD.lootOpen()) Input.clearAll();
       updateLockUI();
     });
     document.getElementById('copy-code').addEventListener('click', () => {
@@ -614,6 +643,8 @@ const Main = (function () {
       HUD.showMessage(S.manualQuality ? '已切换为低画质（关闭阴影，按 F6 切回）' : '已切换为高画质（开启阴影，按 F6 切回）', '#ffd98a');
     }
     const me = myEntry(S.lastSnap);
+    // F 舔包边沿：提前消费，避免进入 30Hz 输入发给服务器触发旧的整箱全拿逻辑
+    const lootKey = Input.takeEdge('loot');
     // 后坐力/落地压头衰减
     S.recoilP *= Math.max(0, 1 - dtReal * 7);
     S.recoilY *= Math.max(0, 1 - dtReal * 7);
@@ -635,6 +666,22 @@ const Main = (function () {
     if (HUD.buyOpen() && S.buyKeyBuf) {
       HUD.buyKey(S.buyKeyBuf);
       S.buyKeyBuf = 0;
+    }
+
+    // 舔包对话框开关（F）
+    if (lootKey) {
+      if (HUD.lootOpen()) closeLootMenu();
+      else {
+        const c = findNearCrate();
+        if (c) openLootMenuFor(c);
+        else if (!HUD.buyOpen()) HUD.showMessage('附近没有战利品箱（靠近尸体后按 F）', '#9aa6b2');
+      }
+    }
+    // 对话框内容随快照刷新；箱子空了/过期自动关闭
+    if (HUD.lootOpen()) {
+      const c = S.lastSnap ? S.lastSnap.crates.find(q => q[0] === S.lootCrateId) : null;
+      if (!c) closeLootMenu();
+      else HUD.updateLootMenu(c);
     }
 
     // 记分板
@@ -738,8 +785,8 @@ const Main = (function () {
       armsLadder: snap ? snap.armsLadder : null
     });
     if (HUD.buyOpen()) HUD.refreshBuyMenu(dispMe, canBuy());
-    // 舔包提示：附近 2.5 米内有战利品箱时显示
-    {
+    // 舔包提示：附近 2.5 米内有战利品箱时显示（对话框打开时不显示）
+    if (!HUD.lootOpen()) {
       let prompt = null;
       if (snap && snap.crates && S.sim && me && me[9] === 1) {
         for (const c of snap.crates) {
@@ -748,7 +795,8 @@ const Main = (function () {
             const parts = [];
             if (c[4]) parts.push(WEAPONS.W[c[4]] ? WEAPONS.W[c[4]].name : c[4]);
             if (c[5]) parts.push(WEAPONS.W[c[5]] ? WEAPONS.W[c[5]].name : c[5]);
-            if (c[6] > 0) parts.push('手雷×' + c[6]);
+            const gids = c[6] ? String(c[6]).split(',').filter(Boolean) : [];
+            if (gids.length) parts.push('手雷×' + gids.length);
             if (c[7] > 0) parts.push('$' + c[7]);
             prompt = parts.join(' · ');
             break;
@@ -831,8 +879,13 @@ const Main = (function () {
     setTimeout(() => HUD.refreshBuyMenu(myEntry(S.lastSnap), canBuy()), 100);
   }
 
-  // 键盘数字（购买菜单）+ Esc 关闭并恢复鼠标控制
+  // 键盘数字（购买菜单）+ Esc 关闭菜单并恢复鼠标控制
   document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && HUD.lootOpen()) {
+      e.preventDefault();
+      closeLootMenu();
+      return;
+    }
     if (!HUD.buyOpen()) return;
     if (/^[1-9]$/.test(e.key)) {
       e.preventDefault();

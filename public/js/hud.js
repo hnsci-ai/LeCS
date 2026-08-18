@@ -38,6 +38,7 @@ const HUD = (function () {
     el.sbTable = $('sb-table');
     el.sbRound = $('sb-round');
     el.lootPrompt = $('loot-prompt');
+    el.lootMenu = $('loot-menu'); el.lootItems = $('loot-items');
     el.fpsVal = $('fps-val'); el.fpsMeter = $('fps-meter'); el.fpsMode = $('fps-mode');
     buildBuyMenu();
   }
@@ -325,10 +326,69 @@ const HUD = (function () {
     if (!el.lootPrompt) return;
     if (text) {
       el.lootPrompt.classList.remove('hidden');
-      el.lootPrompt.innerHTML = '按 <b>F</b> 舔包 — ' + esc(text);
+      el.lootPrompt.innerHTML = '按 <b>F</b> 查看战利品 — ' + esc(text);
     } else {
       el.lootPrompt.classList.add('hidden');
     }
+  }
+
+  // ---------- 舔包对话框 ----------
+  let lootPickCb = null;
+  let lootLastKey = '';
+  function initLoot(cb) { lootPickCb = cb; }
+  function lootOpen() { return !!el.lootMenu && !el.lootMenu.classList.contains('hidden'); }
+
+  function buildLootRows(crate) {
+    const rows = [];
+    const w1 = crate[4], w2 = crate[5];
+    const gids = crate[6] ? String(crate[6]).split(',').filter(Boolean) : [];
+    const money = crate[7] || 0;
+    if (w1) rows.push({ item: 'w1', name: WEAPONS.W[w1] ? WEAPONS.W[w1].name : w1, sub: '主武器' });
+    if (w2) rows.push({ item: 'w2', name: WEAPONS.W[w2] ? WEAPONS.W[w2].name : w2, sub: '副武器' });
+    for (const g of gids) rows.push({ item: 'g:' + g, name: WEAPONS.W[g] ? WEAPONS.W[g].name : g, sub: '手雷' });
+    if (money > 0) rows.push({ item: 'money', name: '$' + money, sub: '金钱', money: true });
+    return rows;
+  }
+
+  function renderLoot(crate) {
+    if (!el.lootItems) return;
+    const key = crate.slice(4).join('|');
+    if (key === lootLastKey) return;
+    lootLastKey = key;
+    const rows = buildLootRows(crate);
+    el.lootItems.innerHTML = '';
+    if (!rows.length) {
+      const d = document.createElement('div');
+      d.className = 'lm-empty';
+      d.textContent = '箱子已空';
+      el.lootItems.appendChild(d);
+      return;
+    }
+    for (const r of rows) {
+      const d = document.createElement('div');
+      d.className = 'lm-item' + (r.money ? ' lm-money' : '');
+      const name = document.createElement('span');
+      name.className = 'lm-name';
+      name.textContent = r.name;
+      const sub = document.createElement('span');
+      sub.className = 'lm-sub';
+      sub.textContent = r.sub;
+      d.appendChild(name); d.appendChild(sub);
+      d.addEventListener('dblclick', () => { if (lootPickCb) lootPickCb(r.item); });
+      el.lootItems.appendChild(d);
+    }
+  }
+
+  function openLootMenu(crate) {
+    if (!el.lootMenu || !crate) return;
+    lootLastKey = '';
+    el.lootMenu.classList.remove('hidden');
+    renderLoot(crate);
+  }
+  function updateLootMenu(crate) { if (lootOpen()) renderLoot(crate); }
+  function closeLootMenu() {
+    if (el.lootMenu) el.lootMenu.classList.add('hidden');
+    lootLastKey = '';
   }
 
   // 每秒更新一次的帧率显示（low = 低画质；manual = null 自动 / true/false 手动档）
@@ -342,6 +402,7 @@ const HUD = (function () {
   return {
     init, updateGame, updateRadar, setKillfeed, showHit, showDamage,
     showMessage, showBanner, setRoomCode, showBuyMenu, refreshBuyMenu,
-    buyOpen, buyKey, showScoreboard, updateLootPrompt, updateFps
+    buyOpen, buyKey, showScoreboard, updateLootPrompt, updateFps,
+    initLoot, lootOpen, openLootMenu, updateLootMenu, closeLootMenu
   };
 })();

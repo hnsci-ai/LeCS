@@ -46,6 +46,7 @@ const Input = (function () {
       if (act.startsWith('slot')) { edges.slot = parseInt(act.slice(4), 10); return; }
       if (act === 'jump' && !keys.jump) edges.jump = true;
       if (act === 'reload' && !keys.reload) edges.reload = true;
+      if (act === 'loot' && !keys.loot) edges.loot = true; // 修复：此前 F 键从未置边沿，舔包输入永远发不出去
       if (act === 'buymenu') edges.buymenu = true;
       if (act === 'scoreboard' && !keys.scoreboard) edges.scoreboardOn = true;
       if (act === 'addbot') edges.addbot = true;

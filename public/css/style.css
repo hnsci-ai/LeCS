@@ -282,6 +282,27 @@ input, select, button { font-family: inherit; }
 .buy-item.owned { border-color: #3f7a4f; background: #16261b; }
 .buy-foot { margin-top: 18px; font-size: 12px; color: #77838f; }
 
+/* 舔包对话框 */
+#loot-menu {
+  position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%);
+  z-index: 35; min-width: 320px; max-width: 420px; pointer-events: auto;
+  background: rgba(10,14,18,.94); border: 1px solid rgba(255,255,255,.16);
+  border-radius: 8px; padding: 16px 18px; box-shadow: 0 8px 30px rgba(0,0,0,.5);
+}
+.lm-title { font-size: 19px; font-weight: 800; color: #ffce45; letter-spacing: 2px; margin-bottom: 10px; }
+#loot-items { display: flex; flex-direction: column; gap: 6px; max-height: 46vh; overflow-y: auto; }
+.lm-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 9px 12px; cursor: pointer; user-select: none;
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08); border-radius: 6px;
+}
+.lm-item:hover { background: rgba(255,255,255,.15); border-color: #ffce45; }
+.lm-item .lm-name { color: #eee; font-weight: 700; font-size: 14px; }
+.lm-item .lm-sub { color: #8fa2b5; font-size: 12px; }
+.lm-item.lm-money .lm-name { color: #ffd257; }
+.lm-empty { text-align: center; color: #77838f; padding: 12px 0; font-size: 13px; }
+.lm-hint { margin-top: 10px; font-size: 12px; color: #ffd98a; text-align: center; }
+
 /* 记分板 */
 #scoreboard {
   position: absolute; inset: 0; z-index: 25;

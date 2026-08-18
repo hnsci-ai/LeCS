@@ -179,6 +179,7 @@ class Game {
     switch (msg.t) {
       case 'input': this.handleInput(p, msg); break;
       case 'buy': this.buy(p, msg.id); break;
+      case 'loot': this.lootItem(p, msg); break;
       case 'addbot': if (this.humanCount() > 0) this.addBot(msg.diff || 'normal'); break;
       case 'removebot': this.removeOneBot(); break;
       case 'ping': p.ws && this.send(p.ws, { t: 'pong', time: msg.time, srv: Date.now() }); break;
@@ -441,7 +442,7 @@ class Game {
     if (!p.alive) return;
     let idx = -1;
     for (let i = 0; i < this.crates.length; i++) {
-      if (Math.hypot(this.crates[i].x - p.x, this.crates[i].z - p.z) < 1.8) { idx = i; break; }
+      if (Math.hypot(this.crates[i].x - p.x, this.crates[i].z - p.z) < 2.5) { idx = i; break; }
     }
     if (idx < 0) return;
     const c = this.crates[idx];
@@ -473,6 +474,44 @@ class Game {
     const empty = !c.weapons[1] && !c.weapons[2] && !c.grenades.length;
     if (empty) this.crates.splice(idx, 1);
     this.emitEvent({ type: 'loot', name: p.name, got: got.join('、'), money: cash });
+  }
+
+  // 舔包对话框：按条目拾取（w1/w2 主副武器、g:<id> 手雷、money 金钱）
+  lootItem(p, msg) {
+    if (!p.alive || !msg || msg.id === undefined) return;
+    const idx = this.crates.findIndex(c => c.id === msg.id);
+    if (idx < 0) return;
+    const c = this.crates[idx];
+    if (Math.hypot(c.x - p.x, c.z - p.z) > 2.5) return; // 必须在箱子旁
+    const got = [];
+    const takeWeapon = (slot) => {
+      const w = c.weapons[slot];
+      if (!w) return;
+      c.weapons[slot] = p.weapons[slot] || null; // 换下的武器留在箱内
+      p.weapons[slot] = w;
+      got.push(W[w.id] ? W[w.id].name : w.id);
+    };
+    if (msg.item === 'w1') takeWeapon(1);
+    else if (msg.item === 'w2') takeWeapon(2);
+    else if (msg.item === 'money') {
+      const cash = c.money;
+      if (cash > 0) { this.addMoney(p, cash); c.money = 0; got.push('$' + cash); }
+    } else if (msg.item && msg.item.indexOf('g:') === 0) {
+      const gid = msg.item.slice(2);
+      if (c.grenades.includes(gid)) {
+        if (!p.grenades) p.grenades = [];
+        if (p.grenades.length < 3 && !p.grenades.includes(gid)) {
+          p.grenades.push(gid);
+          c.grenades.splice(c.grenades.indexOf(gid), 1);
+          if (!p.weapons[4]) p.weapons[4] = { id: gid, mag: 1, reserve: 0 };
+          got.push(W[gid] ? W[gid].name : gid);
+        }
+      }
+    }
+    if (!got.length) return;
+    const empty = !c.weapons[1] && !c.weapons[2] && !c.grenades.length && c.money <= 0;
+    if (empty) this.crates.splice(idx, 1);
+    this.emitEvent({ type: 'loot', name: p.name, got: got.join('、') });
   }
 
   // 人质交互：CT 按 E 带领人质
@@ -923,8 +962,8 @@ class Game {
     if (STREAK_MSGS[killer.streak] && !teamKill) {
       this.emitEvent({ type: 'streak', id: killer.id, name: killer.name, streak: killer.streak });
     }
-    // 死亡掉落战利品箱（经典/人质模式，3 秒后尸体位置生成）
-    if ((this.mode === 'classic' || this.mode === 'hostage') && !teamKill) {
+    // 死亡掉落战利品箱（经典/人质模式；队友的箱子同样可舔）
+    if (this.mode === 'classic' || this.mode === 'hostage') {
       const crateWeapons = {};
       if (victim.weapons[1]) { crateWeapons[1] = { id: victim.weapons[1].id, mag: victim.weapons[1].mag, reserve: victim.weapons[1].reserve }; }
       if (victim.weapons[2]) { crateWeapons[2] = { id: victim.weapons[2].id, mag: victim.weapons[2].mag, reserve: victim.weapons[2].reserve }; }
@@ -934,11 +973,28 @@ class Game {
       victim.weapons = {};
       const cx = victim.x, cz = victim.z;
       const g = this;
-      setTimeout(() => {
-        if (g.phase === C.STATE_END || g.phase === C.STATE_FREEZE) return; // 回合已结束不再生成
+      // 这一杀会不会直接结束回合（对方全灭）？会的话立即掉箱，
+      // 否则回合结束阶段（5 秒）会吞掉 3 秒延迟生成的箱子 → 杀最后一个人舔不了包
+      let tAlive = 0, ctAlive = 0, tMembers = 0, ctMembers = 0;
+      this.players.forEach(p => {
+        if (p.team === C.TEAM_T) { tMembers++; if (p.alive) tAlive++; }
+        else { ctMembers++; if (p.alive) ctAlive++; }
+      });
+      let roundEnding = false;
+      if (this.mode === 'hostage' || this.bomb.state === C.BOMB_PLANTED) roundEnding = ctAlive === 0 && ctMembers > 0;
+      else roundEnding = (tAlive === 0 && tMembers > 0) || (ctAlive === 0 && ctMembers > 0);
+      const spawnCrate = () => {
         g.crates.push({ id: NEXT_ID++, x: cx, y: 0, z: cz, weapons: crateWeapons, grenades: crateGrenades, money: crateMoney, born: Date.now() });
         g.emitEvent({ type: 'crate', event: 'drop', x: +cx.toFixed(1), z: +cz.toFixed(1) });
-      }, 3000);
+      };
+      if (roundEnding) {
+        spawnCrate(); // 立即生成，回合结束展示期（5 秒）内可舔
+      } else {
+        setTimeout(() => {
+          if (g.phase === C.STATE_END || g.phase === C.STATE_FREEZE) return; // 回合已结束不再生成
+          spawnCrate();
+        }, 3000);
+      }
     }
     // 军备竞赛：击杀升级，匕首击杀降级对方，登顶夺冠
     if (this.mode === 'armsrace' && !teamKill) {
@@ -1257,7 +1313,7 @@ class Game {
       armsLadder: ARMS_LADDER,
       crates: this.crates.map(c => [c.id, +c.x.toFixed(1), 0, +c.z.toFixed(1),
         c.weapons[1] ? c.weapons[1].id : '', c.weapons[2] ? c.weapons[2].id : '',
-        c.grenades.length, c.money]),
+        c.grenades.join(','), c.money]),
       shots: this.shots,
       killfeed: this.killfeed
     };
