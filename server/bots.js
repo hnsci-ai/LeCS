@@ -1,7 +1,6 @@
 // server/bots.js — Bot AI：感知、寻路、战斗、埋包/拆包
 'use strict';
 const C = require('../shared/constants');
-const MAP = require('../shared/mapdata');
 const WEAPONS = require('../shared/weapons');
 
 const DIFF = {
@@ -80,7 +79,7 @@ class BotBrain {
       this.repathTimer -= 0.15;
       if (!this.path || this.repathTimer <= 0) {
         this.repathTimer = 0.8 + Math.random() * 0.5;
-        this.path = MAP.findPathSmooth(p.x, p.z, this.goal.x, this.goal.z);
+        this.path = this.game.mapData.findPathSmooth(p.x, p.z, this.goal.x, this.goal.z);
         this.pathIdx = 0;
       }
       return;
@@ -93,7 +92,7 @@ class BotBrain {
       const dx = v.x - p.x, dz = v.z - p.z;
       const d = Math.sqrt(dx * dx + dz * dz);
       if (d > bestD) return;
-      if (!MAP.losClear(p.x, p.eye, p.z, v.x, v.eye, v.z, 0.2)) return;
+      if (!this.game.mapData.losClear(p.x, p.eye, p.z, v.x, v.eye, v.z, 0.2)) return;
       if (this.game.smokeBlocks && this.game.smokeBlocks(p.x, p.eye, p.z, v.x, v.eye, v.z)) return; // 烟雾遮断视线
       // 视野角
       const ang = Math.atan2(-dx, -dz);
@@ -111,7 +110,7 @@ class BotBrain {
     this.repathTimer -= 0.15;
     if (!this.path || this.repathTimer <= 0) {
       this.repathTimer = 0.8 + Math.random() * 0.5;
-      this.path = MAP.findPathSmooth(p.x, p.z, this.goal.x, this.goal.z);
+      this.path = this.game.mapData.findPathSmooth(p.x, p.z, this.goal.x, this.goal.z);
       this.pathIdx = 0;
     }
   }
@@ -119,11 +118,11 @@ class BotBrain {
   chooseGoal() {
     const p = this.bot;
     const g = this.game;
-    const site = g.mode === 'classic' ? MAP.sites[this.siteChoice] : MAP.sites[Math.random() < 0.5 ? 'a' : 'b'];
+    const site = g.mode === 'classic' ? this.game.mapData.sites[this.siteChoice] : this.game.mapData.sites[Math.random() < 0.5 ? 'a' : 'b'];
 
     if (g.mode === 'dm' || g.mode === 'armsrace') {
       if (this.lastEnemySpot && Date.now() - this.lastEnemySpot.t < 6000) return { x: this.lastEnemySpot.x, z: this.lastEnemySpot.z };
-      const s = MAP.sites[Math.random() < 0.5 ? 'a' : 'b'];
+      const s = this.game.mapData.sites[Math.random() < 0.5 ? 'a' : 'b'];
       return { x: s.plant.x + (Math.random() - 0.5) * 8, z: s.plant.z + (Math.random() - 0.5) * 8 };
     }
 
@@ -143,7 +142,7 @@ class BotBrain {
         return { x: 26, z: -26 };
       }
       // T：蹲守人质点
-      const sp = (MAP.hostageSpots || [])[Math.floor(Math.random() * (MAP.hostageSpots || []).length)] || { x: 0, z: 0 };
+      const sp = (this.game.mapData.hostageSpots || [])[Math.floor(Math.random() * (this.game.mapData.hostageSpots || []).length)] || { x: 0, z: 0 };
       if (this.lastEnemySpot && Date.now() - this.lastEnemySpot.t < 6000) return { x: this.lastEnemySpot.x, z: this.lastEnemySpot.z };
       return { x: sp.x + (Math.random() - 0.5) * 4, z: sp.z + (Math.random() - 0.5) * 4 };
     }

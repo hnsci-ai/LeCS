@@ -9,7 +9,7 @@ const Main = (function () {
     usp: 0.008, glock: 0.006, deagle: 0.016, p228: 0.009, fiveseven: 0.007, elites: 0.006
   };
   const S = {
-    ws: null, myId: 0, code: '', mode: 'classic',
+    ws: null, myId: 0, code: '', mode: 'classic', map: 'dust',
     snaps: [], lastSnap: null, roster: [],
     sim: null, simStates: [], seq: 0,
     prevSim: null, simAcc: 0,
@@ -64,7 +64,7 @@ const Main = (function () {
     lobbyMsg('正在连接服务器…');
     connect(() => {
       S.mode = mode;
-      send({ t: 'join', name, mode, team, code: opts.code || undefined });
+      send({ t: 'join', name, mode, team, map: document.getElementById('map').value || 'dust', code: opts.code || undefined });
       S.pendingBots = opts.bots || 0;
     });
   }
@@ -90,6 +90,11 @@ const Main = (function () {
     switch (m.t) {
       case 'joined':
         S.myId = m.id; S.code = m.code; S.mode = m.mode;
+        // 多地图：按服务器权威地图切换全局地图数据（必须在 enterGame/Render.init 之前）
+        if (m.map && window.MAPS) {
+          S.map = window.MAPS[m.map] ? m.map : 'dust';
+          window.MAPDATA = window.MAPS[S.map];
+        }
         enterGame();
         if (S.pendingBots) {
           for (let i = 0; i < S.pendingBots; i++) send({ t: 'addbot', diff: S.botDiff });
@@ -183,7 +188,7 @@ const Main = (function () {
     document.getElementById('hud').classList.remove('hidden');
     HUD.init();
     HUD.initLoot((item) => send({ t: 'loot', id: S.lootCrateId, item })); // 双击拾取
-    HUD.setRoomCode(S.code);
+    HUD.setRoomCode(S.code, S.map);
     const canvas = document.getElementById('gl');
     Render.init(canvas);
     // 画质校准：进游戏前 2 秒强制低画质，测出本机可达最高帧率（≈屏幕刷新率上限）。
@@ -361,7 +366,7 @@ const Main = (function () {
         const s = S.simStates[i];
         if (!s.inp) continue;
         S.sim.yaw = s.yaw;
-        MOVEMENT.step(S.sim, s.inp, C.DT);
+        MOVEMENT.step(S.sim, s.inp, C.DT, MAPDATA.walls);
       }
     }
   }
@@ -388,7 +393,7 @@ const Main = (function () {
       walk: inp.walk, crouch: inp.crouch, jump: inp.jump
     };
     S.prevSim = { x: S.sim.x, y: S.sim.y, z: S.sim.z, yaw: S.sim.yaw, pitch: S.sim.pitch };
-    MOVEMENT.step(S.sim, movIn, C.DT);
+    MOVEMENT.step(S.sim, movIn, C.DT, MAPDATA.walls);
     S.seq++;
     S.simStates.push({ seq: S.seq, x: S.sim.x, y: S.sim.y, z: S.sim.z, vx: S.sim.vx, vz: S.sim.vz, yaw: S.sim.yaw, pitch: S.sim.pitch, inp: movIn });
     if (S.simStates.length > 90) S.simStates.shift();
@@ -641,6 +646,15 @@ const Main = (function () {
       S.lowQuality = S.manualQuality;
       Render.setQuality(S.manualQuality);
       HUD.showMessage(S.manualQuality ? '已切换为低画质（关闭阴影，按 F6 切回）' : '已切换为高画质（开启阴影，按 F6 切回）', '#ffd98a');
+    }
+    // 布娃娃生成异常自检（每 4 秒一次，一次性提示）
+    S.ragCheck = (S.ragCheck || 0) + dtReal;
+    if (S.ragCheck > 4) {
+      S.ragCheck = 0;
+      if (!S.ragWarned && Ragdoll._debugInfo().lastError) {
+        S.ragWarned = true;
+        HUD.showMessage('尸体生成异常，已自动清理（' + Ragdoll._debugInfo().lastError + '）', '#ff7a6b');
+      }
     }
     const me = myEntry(S.lastSnap);
     // F 舔包边沿：提前消费，避免进入 30Hz 输入发给服务器触发旧的整箱全拿逻辑

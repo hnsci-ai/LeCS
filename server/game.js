@@ -1,7 +1,7 @@
 // server/game.js — 游戏房间：权威状态、命中判定、回合、经济、炸弹、Bot 接入
 'use strict';
 const C = require('../shared/constants');
-const MAP = require('../shared/mapdata');
+const MAPS = require('../shared/mapdata').MAPS;
 const MOV = require('../shared/movement');
 const WPN = require('../shared/weapons');
 const BotBrain = require('./bots');
@@ -38,9 +38,11 @@ function segCircleDist(ax, az, bx, bz, cx, cz) {
 }
 
 class Game {
-  constructor(code, mode) {
+  constructor(code, mode, map) {
     this.code = code;
     this.mode = mode; // 'classic' | 'dm'
+    this.map = MAPS[map] ? map : 'dust';
+    this.mapData = MAPS[this.map];
     this.players = new Map(); // id -> player
     this.tickCount = 0;
     this.phase = C.STATE_FREEZE;
@@ -272,7 +274,7 @@ class Game {
     this.hostages = [];
     this.rescued = 0;
     if (this.mode === 'hostage') {
-      (MAP.hostageSpots || []).forEach((sp, i) => {
+      (this.mapData.hostageSpots || []).forEach((sp, i) => {
         this.hostages.push({ id: 9000 + i, x: sp.x, y: 0, z: sp.z, yaw: 0, state: 'idle', leader: null });
       });
     }
@@ -331,7 +333,7 @@ class Game {
   }
 
   spawnPlayer(p) {
-    const list = p.team === C.TEAM_T ? MAP.spawns.t : MAP.spawns.ct;
+    const list = p.team === C.TEAM_T ? this.mapData.spawns.t : this.mapData.spawns.ct;
     const sp = list[this.spawnIdx[p.team === C.TEAM_T ? 't' : 'ct']++ % list.length];
     p.x = sp.x; p.y = 0; p.z = sp.z;
     p.vx = 0; p.vy = 0; p.vz = 0;
@@ -392,7 +394,7 @@ class Game {
   // 人质状态更新与营救判定
   tickHostages(dt) {
     if (this.mode !== 'hostage') return;
-    const bz = MAP.buyZones.ct; // 营救区 = CT 出生区
+    const bz = this.mapData.buyZones.ct; // 营救区 = CT 出生区
     for (const h of this.hostages) {
       if (h.state !== 'follow' || !h.leader) continue;
       const L = h.leader;
@@ -407,7 +409,7 @@ class Game {
       if (dLead > 3) {
         if (!h.path || h.repathT <= 0) {
           h.repathT = 1.5;
-          h.path = MAP.findPathSmooth(h.x, h.z, L.x, L.z);
+          h.path = this.mapData.findPathSmooth(h.x, h.z, L.x, L.z);
           h.pathIdx = 0;
         }
         if (h.path && h.pathIdx < h.path.length) {
@@ -543,7 +545,7 @@ class Game {
     if (this.mode === 'dm') return { ok: true };
     if (!p.alive) return { ok: false, reason: '已阵亡' };
     if (this.phase === C.STATE_LIVE) {
-      const bz = p.team === C.TEAM_T ? MAP.buyZones.t : MAP.buyZones.ct;
+      const bz = p.team === C.TEAM_T ? this.mapData.buyZones.t : this.mapData.buyZones.ct;
       if (!(p.x >= bz.x1 && p.x <= bz.x2 && p.z >= bz.z1 && p.z <= bz.z2)) return { ok: false, reason: '需在购买区购买' };
     }
     let cost = null;
@@ -637,7 +639,7 @@ class Game {
         if (p.alive) {
           if (p.bot && p.brain) p.brain.update(dt);
           else this.applyLook(p);
-          MOV.step(p, p.in, dt);
+          MOV.step(p, p.in, dt, this.mapData.walls);
           p.in.jump = false;
           this.historyPush(p);
           this.checkPickup(p);
@@ -670,7 +672,7 @@ class Game {
     } else if (this.phase === C.STATE_END) {
       this.timeLeft -= dt;
       this.players.forEach(p => {
-        if (p.alive) { MOV.step(p, p.in, dt); this.historyPush(p); }
+        if (p.alive) { MOV.step(p, p.in, dt, this.mapData.walls); this.historyPush(p); }
         if (p.bot && p.brain) p.brain.update(dt);
       });
       this.tickNades(dt);
@@ -826,7 +828,7 @@ class Game {
       const parts = hitParts(pos, pos.h);
       let bestT = -1, bestPart = null;
       for (const part of parts) {
-        const t = MAP.segBox(ox, oy, oz, dir.x, dir.y, dir.z, part);
+        const t = this.mapData.segBox(ox, oy, oz, dir.x, dir.y, dir.z, part);
         if (t >= 0 && t <= RANGE && (bestT < 0 || t < bestT)) { bestT = t; bestPart = part; }
       }
       if (bestT < 0) return;
@@ -838,8 +840,8 @@ class Game {
     for (const h of hits) {
       // 墙体穿透检测
       const wallHits = [];
-      for (const wbox of MAP.walls) {
-        const t = MAP.segBox(ox, oy, oz, dir.x, dir.y, dir.z, {
+      for (const wbox of this.mapData.walls) {
+        const t = this.mapData.segBox(ox, oy, oz, dir.x, dir.y, dir.z, {
           x1: wbox.x1, y1: wbox.y1, z1: wbox.z1, x2: wbox.x2, y2: wbox.y2, z2: wbox.z2
         });
         if (t >= 0 && t < h.dist - 0.2) wallHits.push(t);
@@ -858,7 +860,7 @@ class Game {
     }
     if (!result) {
       // 未命中任何目标：找命中墙面或射程终点
-      const rc = MAP.raycast(ox, oy, oz, dir.x, dir.y, dir.z, 60, 0.02);
+      const rc = this.mapData.raycast(ox, oy, oz, dir.x, dir.y, dir.z, 60, 0.02);
       if (rc.blocked) {
         result = { x: ox + dir.x * rc.dist, y: oy + dir.y * rc.dist, z: oz + dir.z * rc.dist, kind: 1 };
       } else {
@@ -1043,7 +1045,7 @@ class Game {
       for (let axis = 0; axis < 3; axis++) {
         const ax = ['x', 'y', 'z'][axis];
         n[ax] += n['v' + ax] * dt;
-        for (const w of MAP.walls) {
+        for (const w of this.mapData.walls) {
           if (n.x > w.x1 - 0.08 && n.x < w.x2 + 0.08 && n.y > w.y1 - 0.08 && n.y < w.y2 + 0.08 && n.z > w.z1 - 0.08 && n.z < w.z2 + 0.08) {
             const v = 'v' + ax;
             n[v] = -n[v] * 0.45;
@@ -1070,7 +1072,7 @@ class Game {
       const dx = v.x - n.x, dy = v.eye - n.y, dz = v.z - n.z;
       const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
       if (d > radius) return;
-      const los = MAP.losClear(n.x, n.y, n.z, v.x, v.eye, v.z, 0.15);
+      const los = this.mapData.losClear(n.x, n.y, n.z, v.x, v.eye, v.z, 0.15);
       let dmg = W.hegrenade.dmg * (1 - d / radius) * (los ? 1 : 0.45);
       dmg = Math.round(dmg);
       if (dmg <= 0) return;
@@ -1088,7 +1090,7 @@ class Game {
       const dx = v.x - n.x, dz = v.z - n.z;
       const d = Math.sqrt(dx * dx + dz * dz);
       if (d > radius) return;
-      if (!MAP.losClear(n.x, n.y, n.z, v.x, v.eye, v.z, 0.15)) return;
+      if (!this.mapData.losClear(n.x, n.y, n.z, v.x, v.eye, v.z, 0.15)) return;
       // 面向角度：正对闪光 = 1，背对 = 0
       const facing = Math.atan2(-dx, -dz);
       const facingFactor = Math.max(0, Math.cos(angDiffWrap(v.yaw, facing)));
@@ -1156,7 +1158,7 @@ class Game {
 
   inSite(p) {
     for (const key of ['a', 'b']) {
-      const s = MAP.sites[key];
+      const s = this.mapData.sites[key];
       const dx = p.x - s.plant.x, dz = p.z - s.plant.z;
       if (dx * dx + dz * dz <= s.radius * s.radius) return s;
     }
@@ -1218,7 +1220,7 @@ class Game {
           const dx = v.x - this.bomb.x, dz = v.z - this.bomb.z;
           const d = Math.sqrt(dx * dx + dz * dz);
           if (d < 14) {
-            const los = MAP.losClear(this.bomb.x, 1, this.bomb.z, v.x, v.eye, v.z, 0.15);
+            const los = this.mapData.losClear(this.bomb.x, 1, this.bomb.z, v.x, v.eye, v.z, 0.15);
             const dmg = Math.round(220 * (1 - d / 14) * (los ? 1 : 0.4));
             if (dmg > 0) this.applyDamage(v, { id: 0, name: 'C4', team: C.TEAM_T, ws: null }, { dmg: dmg, armorPen: 1 }, 1, d, 1, 'bomb');
           }
@@ -1301,6 +1303,7 @@ class Game {
     });
     return {
       t: 'snap', tick: this.tickCount, phase: this.phase, timeLeft: +this.timeLeft.toFixed(1),
+      map: this.map,
       round: this.round, scores: [this.scores.t, this.scores.ct], mode: this.mode,
       players: pl,
       bomb: [this.bomb.state, +this.bomb.x.toFixed(1), +this.bomb.y.toFixed(1), +this.bomb.z.toFixed(1),

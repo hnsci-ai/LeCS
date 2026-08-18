@@ -54,12 +54,12 @@ function newCode() {
   } while (rooms.has(code));
   return code;
 }
-function createRoom(mode) {
+function createRoom(mode, map) {
   const code = newCode();
-  const game = new Game(code, mode);
+  const game = new Game(code, mode, map);
   rooms.set(code, game);
   game.start();
-  console.log(`[房间] 创建 ${code} (${mode})`);
+  console.log(`[房间] 创建 ${code} (${mode}/${game.map})`);
   return game;
 }
 
@@ -89,11 +89,11 @@ wss.on('connection', (ws) => {
         ws.send(JSON.stringify({ t: 'error', text: '房间已满（最多 ' + C.MAX_PLAYERS + ' 人）' }));
         return;
       }
-      if (!room) room = createRoom(mode);
+      if (!room) room = createRoom(mode, msg.map);
       game = room;
       player = game.addPlayer(ws, name, msg.team || 'auto');
       ws.send(JSON.stringify({
-        t: 'joined', id: player.id, code: room.code, mode: room.mode,
+        t: 'joined', id: player.id, code: room.code, mode: room.mode, map: room.map,
         team: player.team, round: room.round, phase: room.phase
       }));
       ws.send(JSON.stringify({ t: 'roster', players: room.roster() }));

@@ -68,7 +68,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(/\$\d+/.test(hudText.money), '金钱显示');
   check(hudText.weapon.length > 0, '武器名显示');
   check(/\d+\/\d+/.test(hudText.ammo), '弹药显示');
-  check(hudText.roomCode.length === 4, '房间码显示');
+  check(/^[A-Z2-9]{4}/.test(hudText.roomCode) && hudText.roomCode.includes('·'), '房间码显示（含地图名）');
   check(hudText.phase.includes('冻结') || hudText.phase.includes('反恐') || hudText.phase.includes('恐怖'), '阶段提示显示');
 
   // 检查 3D 场景有实际绘制（采样像素）

@@ -6,6 +6,7 @@ const Ragdoll = (function () {
   let ragMat = null; // 所有布娃娃共用材质（碰撞接触对只需注册一次）
   const active = new Map();   // playerId -> ragdoll
   const hitInfo = new Map();  // playerId -> {dir, power, t}
+  let lastError = null;      // 最近一次生成异常（供诊断）
   const MAX_RAGDOLLS = 4;   // 同屏尸体上限
 
   const COL_STATIC = 1, COL_RAG = 2;
@@ -90,98 +91,108 @@ const Ragdoll = (function () {
       removeRagdoll(active.get(oldest));
     }
 
-    const teamCol = team === GAMECONST.TEAM_T ? 0xc87f3a : 0x4f78a4;
-    const dark = team === GAMECONST.TEAM_T ? 0x8a5a28 : 0x35506e;
-    const clothMat = new THREE.MeshLambertMaterial({ color: teamCol });
-    const legMat = new THREE.MeshLambertMaterial({ color: dark });
-    const skinMat = new THREE.MeshLambertMaterial({ color: 0xd9a87c });
-    const matFor = (k) => k === 'head' ? skinMat : (k.startsWith('leg') ? legMat : clothMat);
+    const bodies = [], meshes = [], constraints = [], extras = [];
+    try {
+      const teamCol = team === GAMECONST.TEAM_T ? 0xc87f3a : 0x4f78a4;
+      const dark = team === GAMECONST.TEAM_T ? 0x8a5a28 : 0x35506e;
+      const clothMat = new THREE.MeshLambertMaterial({ color: teamCol });
+      const legMat = new THREE.MeshLambertMaterial({ color: dark });
+      const skinMat = new THREE.MeshLambertMaterial({ color: 0xd9a87c });
+      const mats = [clothMat, legMat, skinMat];
+      const matFor = (k) => k === 'head' ? skinMat : (k.startsWith('leg') ? legMat : clothMat);
 
-    const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
-    const bodies = [], meshes = [], constraints = [], mats = [clothMat, legMat, skinMat];
-    const bodyMap = {};
+      const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
+      const bodyMap = {};
 
-    for (const def of PARTS) {
-      const shape = new CANNON.Box(new CANNON.Vec3(def.s[0] / 2, def.s[1] / 2, def.s[2] / 2));
-      const body = new CANNON.Body({ mass: def.m, shape, material: ragMat });
-      // 位置（应用 yaw 旋转）
-      const px = def.p[0] * cosY + def.p[2] * sinY;
-      const pz = -def.p[0] * sinY + def.p[2] * cosY;
-      body.position.set(x + px, y + def.p[1], z + pz);
-      body.quaternion.setFromEuler(0, yaw, 0);
-      body.linearDamping = 0.05;
-      body.angularDamping = 0.18;
-      body.sleepSpeedLimit = 0.4;
-      body.sleepTimeLimit = 0.6;
-      body.collisionFilterGroup = COL_RAG;
-      body.collisionFilterMask = COL_STATIC; // 肢体之间不互撞，只与静态世界碰撞
-      world.addBody(body);
+      for (const def of PARTS) {
+        const shape = new CANNON.Box(new CANNON.Vec3(def.s[0] / 2, def.s[1] / 2, def.s[2] / 2));
+        const body = new CANNON.Body({ mass: def.m, shape, material: ragMat });
+        // 位置（应用 yaw 旋转）
+        const px = def.p[0] * cosY + def.p[2] * sinY;
+        const pz = -def.p[0] * sinY + def.p[2] * cosY;
+        body.position.set(x + px, y + def.p[1], z + pz);
+        body.quaternion.setFromEuler(0, yaw, 0);
+        body.linearDamping = 0.05;
+        body.angularDamping = 0.18;
+        body.sleepSpeedLimit = 0.4;
+        body.sleepTimeLimit = 0.6;
+        body.collisionFilterGroup = COL_RAG;
+        body.collisionFilterMask = COL_STATIC; // 肢体之间不互撞，只与静态世界碰撞
+        world.addBody(body);
 
-      let geo = geoCache.get(def.k);
-      if (!geo) { geo = new THREE.BoxGeometry(def.s[0], def.s[1], def.s[2]); geoCache.set(def.k, geo); }
-      const mesh = new THREE.Mesh(geo, matFor(def.k));
-      mesh.castShadow = true;
-      scene.add(mesh);
-      bodies.push(body); meshes.push(mesh);
-      bodyMap[def.k] = body;
-    }
-
-    for (const j of JOINTS) {
-      const c = new CANNON.ConeTwistConstraint(bodyMap[j.a], bodyMap[j.b], {
-        pivotA: new CANNON.Vec3(...j.pivotA),
-        pivotB: new CANNON.Vec3(...j.pivotB),
-        axisA: new CANNON.Vec3(0, 1, 0),
-        axisB: new CANNON.Vec3(0, 1, 0),
-        angle: j.angle,
-        twistAngle: j.twist,
-        maxForce: 2e5
-      });
-      world.addConstraint(c);
-      constraints.push(c);
-    }
-
-    // 死亡冲量：命中方向（子弹入射方向）为主，加一点向上
-    const hi = hitInfo.get(id);
-    let dir, power;
-    if (hi && performance.now() - hi.t < 800) {
-      dir = hi.dir; power = hi.power;
-    } else {
-      const a = Math.random() * Math.PI * 2;
-      dir = { x: Math.cos(a), y: 0.15, z: Math.sin(a) };
-      power = 7;
-    }
-    const imp = new CANNON.Vec3(dir.x * power, dir.y * power + power * 0.3, dir.z * power);
-    bodyMap.torso.applyImpulse(imp);
-    bodyMap.head.applyImpulse(new CANNON.Vec3(imp.x * 0.4, imp.y * 0.35, imp.z * 0.4));
-    bodyMap.pelvis.applyImpulse(new CANNON.Vec3(imp.x * 0.5, imp.y * 0.4, imp.z * 0.5));
-    hitInfo.delete(id);
-
-    // 护甲外观：尸体上保留防弹衣背心/头盔（跟随躯干/头部刚体）
-    const extras = [];
-    if ((armor || 0) > 0 || helmet) {
-      const kevlarMat = new THREE.MeshLambertMaterial({ color: 0x4a5246 });
-      mats.push(kevlarMat);
-      if ((armor || 0) > 0) {
-        const vest = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.44, 0.3), kevlarMat);
-        vest.castShadow = true;
-        scene.add(vest);
-        extras.push({ mesh: vest, body: 1, offY: -0.02 }); // torso
+        let geo = geoCache.get(def.k);
+        if (!geo) { geo = new THREE.BoxGeometry(def.s[0], def.s[1], def.s[2]); geoCache.set(def.k, geo); }
+        const mesh = new THREE.Mesh(geo, matFor(def.k));
+        mesh.castShadow = true;
+        scene.add(mesh);
+        bodies.push(body); meshes.push(mesh);
+        bodyMap[def.k] = body;
       }
-      if (helmet) {
-        const helm = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.11, 0.25), kevlarMat);
-        helm.castShadow = true;
-        scene.add(helm);
-        extras.push({ mesh: helm, body: 2, offY: 0.15 }); // head
-      }
-    }
 
-    const r = { id, bodies, meshes, constraints, mats, extras, born: performance.now(), fading: false, timer: null };
-    // 硬性定时清理：不依赖渲染循环/帧率，2.5 秒后无条件移除（用户反馈尸体 10 秒不消失）
-    r.timer = setTimeout(() => {
-      const rr = active.get(id);
-      if (rr) removeRagdoll(rr);
-    }, 2500);
-    active.set(id, r);
+      for (const j of JOINTS) {
+        const c = new CANNON.ConeTwistConstraint(bodyMap[j.a], bodyMap[j.b], {
+          pivotA: new CANNON.Vec3(...j.pivotA),
+          pivotB: new CANNON.Vec3(...j.pivotB),
+          axisA: new CANNON.Vec3(0, 1, 0),
+          axisB: new CANNON.Vec3(0, 1, 0),
+          angle: j.angle,
+          twistAngle: j.twist,
+          maxForce: 2e5
+        });
+        world.addConstraint(c);
+        constraints.push(c);
+      }
+
+      // 死亡冲量：命中方向（子弹入射方向）为主，加一点向上
+      const hi = hitInfo.get(id);
+      let dir, power;
+      if (hi && performance.now() - hi.t < 800) {
+        dir = hi.dir; power = hi.power;
+      } else {
+        const a = Math.random() * Math.PI * 2;
+        dir = { x: Math.cos(a), y: 0.15, z: Math.sin(a) };
+        power = 7;
+      }
+      const imp = new CANNON.Vec3(dir.x * power, dir.y * power + power * 0.3, dir.z * power);
+      bodyMap.torso.applyImpulse(imp);
+      bodyMap.head.applyImpulse(new CANNON.Vec3(imp.x * 0.4, imp.y * 0.35, imp.z * 0.4));
+      bodyMap.pelvis.applyImpulse(new CANNON.Vec3(imp.x * 0.5, imp.y * 0.4, imp.z * 0.5));
+      hitInfo.delete(id);
+
+      // 护甲外观：尸体上保留防弹衣背心/头盔（跟随躯干/头部刚体）
+      if ((armor || 0) > 0 || helmet) {
+        const kevlarMat = new THREE.MeshLambertMaterial({ color: 0x4a5246 });
+        mats.push(kevlarMat);
+        if ((armor || 0) > 0) {
+          const vest = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.44, 0.3), kevlarMat);
+          vest.castShadow = true;
+          scene.add(vest);
+          extras.push({ mesh: vest, body: 1, offY: -0.02 }); // torso
+        }
+        if (helmet) {
+          const helm = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.11, 0.25), kevlarMat);
+          helm.castShadow = true;
+          scene.add(helm);
+          extras.push({ mesh: helm, body: 2, offY: 0.15 }); // head
+        }
+      }
+
+      const r = { id, bodies, meshes, constraints, mats, extras, born: performance.now(), fading: false, timer: null };
+      // 硬性定时清理：不依赖渲染循环/帧率，2.5 秒后无条件移除（用户反馈尸体 10 秒不消失）
+      r.timer = setTimeout(() => {
+        const rr = active.get(id);
+        if (rr) removeRagdoll(rr);
+      }, 2500);
+      active.set(id, r);
+    } catch (e) {
+      // 生成失败兜底：清理已加入场景/世界的部件，绝不留下没有清理定时器的孤儿尸体
+      for (const m of meshes) scene.remove(m);
+      for (const e of extras) scene.remove(e.mesh);
+      for (const b of bodies) { try { world.removeBody(b); } catch (e2) { /* ignore */ } }
+      for (const c of constraints) { try { world.removeConstraint(c); } catch (e2) { /* ignore */ } }
+      lastError = String((e && e.message) || e);
+      console.warn('[Ragdoll] 生成失败，已清理部件:', lastError);
+    }
   }
 
   function removeFor(id) {
@@ -252,5 +263,5 @@ const Ragdoll = (function () {
     return out;
   }
 
-  return { init, spawn, removeFor, registerHit, update, clearAll, _debugCount, _debugState, _debugExtras: () => Array.from(active.values()).map(r => r.extras.length) };
+  return { init, spawn, removeFor, registerHit, update, clearAll, _debugCount, _debugState, _debugExtras: () => Array.from(active.values()).map(r => r.extras.length), _debugInfo: () => ({ active: active.size, lastError }) };
 })();

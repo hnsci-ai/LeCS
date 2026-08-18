@@ -320,7 +320,10 @@ const HUD = (function () {
     bannerTimer = setTimeout(() => { el.banner.className = ''; }, 3200);
   }
 
-  function setRoomCode(code) { el.roomCode.textContent = code || '----'; }
+  function setRoomCode(code, map) {
+    const mapName = map === 'dust2' ? '沙漠二' : '仓库';
+    el.roomCode.textContent = (code || '----') + (map ? ' · ' + mapName : '');
+  }
 
   function updateLootPrompt(text) {
     if (!el.lootPrompt) return;

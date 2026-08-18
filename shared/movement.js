@@ -1,13 +1,15 @@
 // shared/movement.js — 玩家移动物理（UMD，服务器权威 + 客户端预测共用）
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory(require('./mapdata'), require('./constants'));
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./mapdata').MAPDATA, require('./constants'));
   else root.MOVEMENT = factory(root.MAPDATA, root.GAMECONST);
 })(typeof self !== 'undefined' ? self : this, function (MAP, C) {
   'use strict';
 
   // p: {x,y,z,vx,vy,vz,yaw,onGround,crouch,h,eye}
   // input: {f,b,l,r,walk,crouch,jump}（jump 为边沿触发，由调用方消费）
-  function step(p, input, dt) {
+  // walls: 可选，指定地图墙体（多地图支持）；缺省用默认地图 MAP.walls
+  function step(p, input, dt, walls) {
+    var ws = walls || MAP.walls;
     // 蹲伏高度过渡
     var targetH = input.crouch ? C.CROUCH_H : C.PLAYER_H;
     if (targetH < p.h) p.h = Math.max(targetH, p.h - 10 * dt);
@@ -51,14 +53,14 @@
     var R = C.PLAYER_R;
     // 分轴移动 + 碰撞
     var nx = p.x + p.vx * dt;
-    if (moveAxis(p, 'x', nx)) { p.x = nx; } else { p.vx = 0; }
+    if (moveAxis(p, 'x', nx, ws)) { p.x = nx; } else { p.vx = 0; }
     var nz = p.z + p.vz * dt;
-    if (moveAxis(p, 'z', nz)) { p.z = nz; } else { p.vz = 0; }
+    if (moveAxis(p, 'z', nz, ws)) { p.z = nz; } else { p.vz = 0; }
     var ny = p.y + p.vy * dt;
     if (ny <= 0) { p.y = 0; if (p.vy < 0) p.vy = 0; if (!p.onGround) { p.onGround = true; } }
     else {
       // 顶部（箱子）站立检测
-      var support = findSupport(p, ny);
+      var support = findSupport(p, ny, ws);
       if (support !== null) {
         p.y = support;
         if (p.vy < 0) p.vy = 0;
@@ -81,11 +83,10 @@
     return x + r > b.x1 && x - r < b.x2 && y + h > b.y1 && y < b.y2 && z + r > b.z1 && z - r < b.z2;
   }
 
-  function moveAxis(p, axis, nv) {
+  function moveAxis(p, axis, nv, ws) {
     var R = C.PLAYER_R;
-    var walls = MAP.walls;
-    for (var i = 0; i < walls.length; i++) {
-      var w = walls[i];
+    for (var i = 0; i < ws.length; i++) {
+      var w = ws[i];
       var x = axis === 'x' ? nv : p.x;
       var z = axis === 'z' ? nv : p.z;
       if (overlaps(x, p.y, z, R, p.h, w)) return false;
@@ -94,10 +95,10 @@
   }
 
   // 站在箱子顶部时返回支撑高度，否则 null
-  function findSupport(p, ny) {
+  function findSupport(p, ny, ws) {
     var R = C.PLAYER_R, best = null;
-    for (var i = 0; i < MAP.walls.length; i++) {
-      var w = MAP.walls[i];
+    for (var i = 0; i < ws.length; i++) {
+      var w = ws[i];
       if (p.x + R > w.x1 && p.x - R < w.x2 && p.z + R > w.z1 && p.z - R < w.z2) {
         if (p.y >= w.y2 - 0.02 && ny >= w.y2 - 0.5 && ny <= w.y2 + 0.3) {
           if (best === null || w.y2 < best) best = w.y2;
