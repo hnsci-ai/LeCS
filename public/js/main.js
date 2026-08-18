@@ -336,8 +336,8 @@ const Main = (function () {
     const pEff = Math.max(-1.55, Math.min(1.55, Input.pitch() + S.recoilP));
     S.sim.yaw = Input.yaw() + S.recoilY;
     S.sim.pitch = pEff;
-    S.viewPitch = pEff;
-    S.viewYaw = Input.yaw() + S.recoilY;
+    // 注意：视图朝向不走这里（30Hz），computeView 每渲染帧直接读 Input，
+    // 否则自己打的时候镜头转向只有 30Hz，观战却是 60Hz 插值 → 手感差
     // 落地检测
     if (!S.sim.onGround) { S.fallTime += C.DT; S.wasAir = true; }
     else if (S.wasAir) {
@@ -742,15 +742,16 @@ const Main = (function () {
     const s = S.sim;
     if (!s) return { camX: 0, camY: 2, camZ: 0, yaw: 0, pitch: 0 };
     if (me && me[9] === 1) {
-      // 第一人称（模拟状态 + 平滑插值）
+      // 第一人称（模拟状态 + 平滑插值）；朝向每渲染帧读输入（60Hz+），保证镜头顺滑
       const f = S.prevSim && S.simAcc > 0 ? Math.min(1, S.simAcc / C.DT) : 0;
       const x = (S.prevSim ? S.prevSim.x : s.x) + (s.x - (S.prevSim ? S.prevSim.x : s.x)) * f;
       const y = (S.prevSim ? S.prevSim.y : s.y) + (s.y - (S.prevSim ? S.prevSim.y : s.y)) * f;
       const z = (S.prevSim ? S.prevSim.z : s.z) + (s.z - (S.prevSim ? S.prevSim.z : s.z)) * f;
+      const pEff = Math.max(-1.55, Math.min(1.55, Input.pitch() + S.recoilP));
       return {
         camX: x, camY: y + s.eye, camZ: z,
-        yaw: S.viewYaw !== undefined ? S.viewYaw : Input.yaw(),
-        pitch: (S.viewPitch !== undefined ? S.viewPitch : Input.pitch()) + S.landDip * 0.035
+        yaw: Input.yaw() + S.recoilY,
+        pitch: pEff + S.landDip * 0.035
       };
     }
     // 观战：跟随队友
