@@ -240,9 +240,10 @@ const Render = (function () {
 
   function buildMap() {
     const sand = sandTexture();
-    sand.repeat.set(22, 22);
+    const groundSize = MAPDATA.bounds.max * 2 + 10; // 小地图自动缩小地面
+    sand.repeat.set(groundSize / 3.4, groundSize / 3.4);
     ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(74, 74),
+      new THREE.PlaneGeometry(groundSize, groundSize),
       new THREE.MeshLambertMaterial({ map: sand })
     );
     ground.rotation.x = -Math.PI / 2;

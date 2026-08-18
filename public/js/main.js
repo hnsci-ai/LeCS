@@ -40,6 +40,15 @@ const Main = (function () {
     document.getElementById('botcount').addEventListener('input', (e) => {
       document.getElementById('botcount-label').textContent = e.target.value;
     });
+    // 军备竞赛 → 强制专用小图（arms），其他模式可选任意地图
+    const modeSel = document.getElementById('mode');
+    const mapSel = document.getElementById('map');
+    function syncMapSel() {
+      if (modeSel.value === 'armsrace') { mapSel.value = 'arms'; mapSel.disabled = true; }
+      else mapSel.disabled = false;
+    }
+    modeSel.addEventListener('change', syncMapSel);
+    syncMapSel();
     document.getElementById('btn-practice').addEventListener('click', () => start({
       code: null,
       bots: parseInt(document.getElementById('botcount').value, 10),

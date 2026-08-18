@@ -13,11 +13,9 @@
 
   var WALL_H = 3.2; // 墙高
   var THICK = 0.5;  // 墙厚
-  var BOUND = 32;   // 世界半径
   var NAV_CELL = 1.0;
-  var navOrigin = -31.5, navSize = 63;
 
-  function isBoundaryEdge(coord) { return Math.abs(Math.abs(coord) - BOUND) < 0.001; }
+  function isBoundaryEdge(coord, bound) { return Math.abs(Math.abs(coord) - bound) < 0.001; }
 
   function box(x1, y1, z1, x2, y2, z2) {
     return { x1: x1, y1: y1, z1: z1, x2: x2, y2: y2, z2: z2 };
@@ -49,7 +47,7 @@
   }
 
   // ---------- 从房间生成墙体盒子（去重） ----------
-  function wallsFromRooms(rooms) {
+  function wallsFromRooms(rooms, BOUND) {
     var walls = [];
     var seen = {};
     function add(w) {
@@ -67,7 +65,7 @@
         { c1: r.z1, c2: r.z2, fixed: r.x2, axis: 'x', name: 'e' }
       ];
       edges.forEach(function (ed) {
-        if (isBoundaryEdge(ed.fixed)) return; // 世界边界由周长墙负责
+        if (isBoundaryEdge(ed.fixed, BOUND)) return; // 世界边界由周长墙负责
         var opens = (r.open && r.open[ed.name]) ? r.open[ed.name].slice() : [];
         var segs = [];
         for (var i = 0; i < opens.length; i += 2) segs.push([opens[i], opens[i + 1]]);
@@ -145,6 +143,9 @@
 
   // ---------- 构建一张地图 ----------
   function buildMap(def) {
+    var BOUND = def.bound || 32;           // 世界半径（小地图可用更小的 bound）
+    var navOrigin = -BOUND + 0.5;
+    var navSize = Math.round(BOUND * 2) - 1;
     var rooms = def.rooms;
     var crates = buildCrates(def.crateDefs);
     var covers = buildCovers(def.coverDefs);
@@ -153,7 +154,7 @@
     var buyZones = def.buyZones;
     var sites = def.sites;
 
-    var walls = wallsFromRooms(rooms).concat(crates).concat(covers);
+    var walls = wallsFromRooms(rooms, BOUND).concat(crates).concat(covers);
     var raycast = makeRaycast(walls);
 
     function losClear(x1, y1, z1, x2, y2, z2, expand) {
@@ -465,9 +466,56 @@
     }
   };
 
+  // ================= 地图三：arms（军备竞赛专用小图） =================
+  // 32×32 紧凑竞技场：四边房间 + 中央广场，出门即遭遇，方便找人
+  var armsDef = {
+    bound: 16,
+    rooms: [
+      // 注意生成器约定：n 边 = z1，s 边 = z2（朝向广场的边要开在这里）
+      { id: 'north', x1: -10, z1: 8,  x2: 10, z2: 16, open: { n: [-10, 10] } },
+      { id: 'south', x1: -10, z1: -16, x2: 10, z2: -8, open: { s: [-10, 10] } },
+      { id: 'west',  x1: -16, z1: -8,  x2: -10, z2: 8,  open: { e: [-8, 8] } },
+      { id: 'east',  x1: 10,  z1: -8,  x2: 16,  z2: 8,  open: { w: [-8, 8] } }
+    ],
+    crateDefs: [
+      [0, 0],                       // 广场中央箱
+      [-6, 11], [6, 11],            // 北侧
+      [-7, -10], [7, -10],          // 南侧
+      [-13, -4], [-13, 4],          // 西侧
+      [13, -4], [13, 4]             // 东侧
+    ],
+    coverDefs: {
+      sandbag: [[-4, 0], [4, 0], [-8, -4], [8, -4], [-8, 4], [8, 4], [0, 9], [0, -9]],
+      barrel: [[-2, 2], [2, -2], [-4, 8], [4, -8], [-8, 0], [8, 0]],
+      block: [[-6, -6], [6, 6]]
+    },
+    hostageSpots: [
+      { x: -5, z: 3 }, { x: 5, z: -3 }, { x: -5, z: -3 }, { x: 5, z: 3 }
+    ],
+    spawns: {
+      t: [
+        { x: -6, z: 13, yaw: 0 }, { x: 0, z: 13, yaw: 0 },
+        { x: 6, z: 13, yaw: 0 }, { x: -2, z: 12, yaw: 0.2 }, { x: 2, z: 12, yaw: -0.2 }
+      ],
+      ct: [
+        { x: -6, z: -13, yaw: Math.PI }, { x: 0, z: -13, yaw: Math.PI },
+        { x: 6, z: -13, yaw: Math.PI }, { x: -2, z: -12, yaw: Math.PI - 0.2 }, { x: 2, z: -12, yaw: Math.PI + 0.2 }
+      ]
+    },
+    buyZones: {
+      t: { x1: -10, z1: 8, x2: 10, z2: 16 },
+      ct: { x1: -10, z1: -16, x2: 10, z2: -8 }
+    },
+    sites: {
+      a: { rect: { x1: -16, z1: -8, x2: -10, z2: 8 }, plant: { x: -13, z: 0 }, radius: 4, letter: 'A' },
+      b: { rect: { x1: 10, z1: -8, x2: 16, z2: 8 }, plant: { x: 13, z: 0 }, radius: 4, letter: 'B' }
+    }
+  };
+
   var MAPS = {
     dust: buildMap(dustDef),
-    dust2: buildMap(dust2Def)
+    dust2: buildMap(dust2Def),
+    arms: buildMap(armsDef)
   };
 
   return { MAPS: MAPS, MAPDATA: MAPS.dust };

@@ -56,7 +56,8 @@ function newCode() {
 }
 function createRoom(mode, map) {
   const code = newCode();
-  const game = new Game(code, mode, map);
+  const effMap = mode === 'armsrace' ? 'arms' : (map || 'dust'); // 军备竞赛专用小图
+  const game = new Game(code, mode, effMap);
   rooms.set(code, game);
   game.start();
   console.log(`[房间] 创建 ${code} (${mode}/${game.map})`);

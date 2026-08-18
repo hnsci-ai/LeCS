@@ -216,7 +216,7 @@ const HUD = (function () {
     ctx.save();
     ctx.translate(R, R);
     ctx.rotate(-myYaw);
-    const sc = 2.45; // 像素/米
+    const sc = (R - 10) / Math.max(1, MAPDATA.bounds.max + 1); // 像素/米（小地图自动放大）
     // 墙壁
     ctx.fillStyle = 'rgba(210,220,228,0.5)';
     for (const w of MAPDATA.walls) {
@@ -321,7 +321,7 @@ const HUD = (function () {
   }
 
   function setRoomCode(code, map) {
-    const mapName = map === 'dust2' ? '沙漠二' : '仓库';
+    const mapName = map === 'dust2' ? '沙漠二' : (map === 'arms' ? '军备竞技场' : '仓库');
     el.roomCode.textContent = (code || '----') + (map ? ' · ' + mapName : '');
   }
 
