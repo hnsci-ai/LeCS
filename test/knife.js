@@ -60,6 +60,21 @@ function check(cond, msg) { if (cond) console.log('  ✓ ' + msg); else { failur
   console.log('  AK 开火曳光数:', t0, '→', t1);
   check(t1 > t0, '对比验证：AK 开火有曳光（枪械特效路径正常）');
 
+  // 切枪显示回归：3→匕首、2→手枪、1→AK（修复新旧枪叠加）
+  await page.keyboard.press('Digit3');
+  await sleep(700);
+  const vm3 = await page.evaluate(() => VM.weaponId());
+  await page.keyboard.press('Digit2');
+  await sleep(700);
+  const vm2 = await page.evaluate(() => VM.weaponId());
+  await page.keyboard.press('Digit1');
+  await sleep(700);
+  const vm1 = await page.evaluate(() => VM.weaponId());
+  const pistols = ['usp', 'glock', 'deagle', 'p228', 'fiveseven', 'elites'];
+  console.log('  切枪显示: 3→' + vm3 + ' 2→' + vm2 + ' 1→' + vm1);
+  check(vm3 === 'knife' && pistols.includes(vm2) && vm1 === 'ak47',
+    '切枪后显示模型正确变化 ✓ 关键修复');
+
   check(errors.length === 0, '无 JS 错误' + (errors.length ? ': ' + errors[0].slice(0, 150) : ''));
   await browser.close();
   console.log(failures === 0 ? '\n=== 匕首效果测试通过 ✓ ===' : `\n=== ${failures} 项失败 ✗ ===`);

@@ -383,6 +383,7 @@ const VM = (function () {
   let switchAnim = null; // {phase:'down'|'up', t:0, nextId}
 
   function buildNow(id) {
+    if (cur) { group.remove(cur.root); cur = null; } // 移除旧枪（修复：切换后新旧枪叠加显示旧枪）
     const b = build(id);
     addHands(b.root, id);
     group.add(b.root);
