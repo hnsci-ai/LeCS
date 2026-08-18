@@ -618,6 +618,11 @@ class Game {
       this.tickNades(dt);
       this.tickSmokes(dt);
       this.tickHostages(dt);
+      // 战利品箱 30 秒后过期消失（避免整回合残留）
+      if (this.crates.length) {
+        const now2 = Date.now();
+        this.crates = this.crates.filter(c => now2 - c.born < 30000);
+      }
       this.checkRoundEnd();
       if (this.timeLeft <= 0) {
         // 经典/军备：CT 胜；人质营救：时间到 T 胜（人质未获救）
@@ -931,7 +936,7 @@ class Game {
       const g = this;
       setTimeout(() => {
         if (g.phase === C.STATE_END || g.phase === C.STATE_FREEZE) return; // 回合已结束不再生成
-        g.crates.push({ id: NEXT_ID++, x: cx, y: 0, z: cz, weapons: crateWeapons, grenades: crateGrenades, money: crateMoney });
+        g.crates.push({ id: NEXT_ID++, x: cx, y: 0, z: cz, weapons: crateWeapons, grenades: crateGrenades, money: crateMoney, born: Date.now() });
         g.emitEvent({ type: 'crate', event: 'drop', x: +cx.toFixed(1), z: +cz.toFixed(1) });
       }, 3000);
     }

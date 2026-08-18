@@ -920,7 +920,7 @@ const Render = (function () {
 
   // ---------- 特效更新 ----------
   function updateEffects(dt) {
-    try { Ragdoll.update(dt); } catch (e) { /* 物理异常不冻结渲染循环 */ }
+    try { Ragdoll.update(dt); } catch (e) { console.warn('[Ragdoll] 更新异常:', e && e.message, e && e.stack ? String(e.stack).split('\n')[1] : ''); }
     for (const t of tracerPool) {
       if (t.life > 0) {
         t.life -= dt;

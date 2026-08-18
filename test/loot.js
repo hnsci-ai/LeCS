@@ -136,6 +136,18 @@ class Client {
   }
   check(errors.length === 0, '无 JS 错误' + (errors.length ? ': ' + errors[0].slice(0, 150) : ''));
 
+  console.log('== 4. 箱子 30 秒过期 ==');
+  // 第 3 节生成的箱子（含换下的 Glock）应在 30 秒后消失
+  const t0 = Date.now();
+  while (Date.now() - t0 < 33000) {
+    await sleep(1000);
+    const n = (a.last.crates || []).length;
+    if (n === 0) break;
+  }
+  const left = (a.last.crates || []).length;
+  console.log('  30 秒后剩余箱子:', left);
+  check(left === 0, '未捡取的箱子 30 秒后自动消失 ✓');
+
   await browser.close();
   console.log(failures === 0 ? '\n=== 舔包测试通过 ✓ ===' : `\n=== ${failures} 项失败 ✗ ===`);
   process.exit(failures === 0 ? 0 : 1);
