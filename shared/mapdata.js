@@ -32,7 +32,7 @@
   }
 
   // ---------- 掩体（沙袋/油桶/水泥墩，均为碰撞体） ----------
-  var COVER_SIZE = { sandbag: [2.4, 0.9], barrel: [0.8, 1.05], block: [1.5, 1.2] };
+  var COVER_SIZE = { sandbag: [2.4, 0.8], barrel: [0.8, 1.05], block: [1.5, 1.2], tall: [1.6, 2.2] }; // sandbag 可跳上站立；tall 高过人
   function buildCovers(coverDefs) {
     var covers = [];
     Object.keys(coverDefs).forEach(function (type) {
@@ -154,7 +154,10 @@
     var buyZones = def.buyZones;
     var sites = def.sites;
 
-    var walls = wallsFromRooms(rooms, BOUND).concat(crates).concat(covers);
+    var extraWalls = (def.extraWalls || []).map(function (w) {
+      return { x1: w.x1, y1: w.y1 || 0, z1: w.z1, x2: w.x2, y2: w.y2 || WALL_H, z2: w.z2 };
+    });
+    var walls = wallsFromRooms(rooms, BOUND).concat(extraWalls).concat(crates).concat(covers);
     var raycast = makeRaycast(walls);
 
     function losClear(x1, y1, z1, x2, y2, z2, expand) {
@@ -181,7 +184,8 @@
           var walk = true;
           for (var k = 0; k < walls.length; k++) {
             var w = walls[k];
-            if (cx > w.x1 - R && cx < w.x2 + R && cz > w.z1 - R && cz < w.z2 + R && 1.0 > w.y1 && 1.0 < w.y2 + 0.2) { walk = false; break; }
+            // 导航格阻挡：高于 0.55m 的物体都算障碍（沙袋可跳上但 A* 无跳跃概念，路径绕行）
+            if (cx > w.x1 - R && cx < w.x2 + R && cz > w.z1 - R && cz < w.z2 + R && 1.0 > w.y1 && w.y2 > 0.55) { walk = false; break; }
           }
           grid[j * navSize + i] = walk ? 1 : 0;
         }
@@ -467,7 +471,7 @@
   };
 
   // ================= 地图三：arms（军备竞赛专用小图） =================
-  // 32×32 紧凑竞技场：四边房间 + 中央广场，出门即遭遇，方便找人
+  // 32×32 紧凑竞技场：四边房间 + 中央广场；中线高墙隔断，双方出生点互不可见，绕两侧房进出
   var armsDef = {
     bound: 16,
     rooms: [
@@ -477,20 +481,24 @@
       { id: 'west',  x1: -16, z1: -8,  x2: -10, z2: 8,  open: { e: [-8, 8] } },
       { id: 'east',  x1: 10,  z1: -8,  x2: 16,  z2: 8,  open: { w: [-8, 8] } }
     ],
+    // 中线高墙：横贯广场（z=0，高 3.2m），出生点直线互不可见，只能绕西/东侧房
+    extraWalls: [
+      { x1: -10, z1: -0.25, x2: 10, z2: 0.25, y2: 3.2 }
+    ],
     crateDefs: [
-      [0, 0],                       // 广场中央箱
       [-6, 11], [6, 11],            // 北侧
       [-7, -10], [7, -10],          // 南侧
       [-13, -4], [-13, 4],          // 西侧
       [13, -4], [13, 4]             // 东侧
     ],
     coverDefs: {
-      sandbag: [[-4, 0], [4, 0], [-8, -4], [8, -4], [-8, 4], [8, 4], [0, 9], [0, -9]],
-      barrel: [[-2, 2], [2, -2], [-4, 8], [4, -8], [-8, 0], [8, 0]],
-      block: [[-6, -6], [6, 6]]
+      sandbag: [[-6, -3], [6, -3], [-6, 3], [6, 3], [0, 9], [0, -9]],  // 沙袋 0.8m，可跳上
+      barrel: [[-2, -4], [2, -4], [-2, 4], [2, 4], [-14, 6], [14, 6]],
+      block: [[-6, -6], [6, 6]],
+      tall: [[-4, 3], [4, 3], [-4, -3], [4, -3]]                       // 高过人掩体（2.2m）
     },
     hostageSpots: [
-      { x: -5, z: 3 }, { x: 5, z: -3 }, { x: -5, z: -3 }, { x: 5, z: 3 }
+      { x: -15, z: 2 }, { x: -14, z: -2 }, { x: 14, z: 2 }, { x: 15, z: -2 }
     ],
     spawns: {
       t: [

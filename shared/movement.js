@@ -87,6 +87,9 @@
     var R = C.PLAYER_R;
     for (var i = 0; i < ws.length; i++) {
       var w = ws[i];
+      // 低掩体可踩踏（跳上站顶）：顶面 ≤1.1m 的箱子/沙袋，脚部接近顶面时放行碰撞，
+      // 跳起后越过顶面由 findSupport 接住；高箱子（>1.1m）仍然挡住
+      if (w.y2 <= 1.1 && p.y > w.y2 - 0.35) continue;
       var x = axis === 'x' ? nv : p.x;
       var z = axis === 'z' ? nv : p.z;
       if (overlaps(x, p.y, z, R, p.h, w)) return false;

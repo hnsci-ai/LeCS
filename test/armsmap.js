@@ -86,6 +86,20 @@ function check(cond, msg) { if (cond) console.log('  ✓ ' + msg); else { failur
   console.log('  客户端地图:', roomsIds, '· bounds.max =', bounds);
   check(roomsIds === 'north,south,west,east', '客户端已切换到小图数据 ✓');
   check(bounds === 16, '小图世界半径 16（32×32 紧凑竞技场）✓');
+  // 双方出生点互不可见（中线高墙隔断）
+  const spawnLos = await page.evaluate(() => {
+    for (const t of MAPDATA.spawns.t) {
+      for (const c of MAPDATA.spawns.ct) {
+        if (MAPDATA.losClear(t.x, 1.62, t.z, c.x, 1.62, c.z, 0.2)) return false;
+      }
+    }
+    return true;
+  });
+  check(spawnLos, '双方所有出生点互不可见（中线高墙）✓');
+  // 高过人掩体存在
+  const tallCount = await page.evaluate(() => MAPDATA.covers.filter(c => c.cover === 'tall').length);
+  console.log('  高过人掩体数:', tallCount);
+  check(tallCount >= 4, '含高过人掩体（2.2m，站直也看不到）✓');
   const pixels = await page.evaluate(() => {
     const c = document.getElementById('gl');
     const ctx = c.getContext('webgl2') || c.getContext('webgl');

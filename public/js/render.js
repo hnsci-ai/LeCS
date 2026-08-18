@@ -303,6 +303,7 @@ const Render = (function () {
     const bags = covers.filter(c => c.cover === 'sandbag');
     const blocks = covers.filter(c => c.cover === 'block');
     const barrels = covers.filter(c => c.cover === 'barrel');
+    const talls = covers.filter(c => c.cover === 'tall');
     function addCoverMesh(list, geo, mat) {
       const im = new THREE.InstancedMesh(geo, mat, list.length);
       list.forEach((w, i) => {
@@ -318,6 +319,7 @@ const Render = (function () {
     addCoverMesh(bags, new THREE.BoxGeometry(1, 1, 1), bagMat);
     addCoverMesh(blocks, new THREE.BoxGeometry(1, 1, 1), blockMat);
     addCoverMesh(barrels, new THREE.CylinderGeometry(0.5, 0.5, 1, 10), barrelMat);
+    addCoverMesh(talls, new THREE.BoxGeometry(1, 1, 1), blockMat); // 高过人掩体（2.2m 混凝土墩）
 
     // 墙根环境阴影（视觉接地）
     const aoBoxes = MAPDATA.walls.filter(w => w.y1 < 0.01 && !w.cover);
