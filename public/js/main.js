@@ -24,7 +24,8 @@ const Main = (function () {
     spectateId: 0,          // 观战目标 id
     inventory: {},          // slot -> weaponId（本地乐观切枪用）
     slotBuf: 0,
-    joinState: 'idle'
+    joinState: 'idle',
+    fpsAcc: 0, fpsN: 0, fpsHist: [], lowQuality: false  // 帧率统计与自动画质档
   };
 
   // ---------- 大厅 ----------
@@ -561,6 +562,22 @@ const Main = (function () {
   function frame(now) {
     const dtReal = Math.min(0.1, (now - lastT) / 1000);
     lastT = now;
+    // 帧率统计（1 秒平均）+ 自动画质：持续低于 40 帧关阴影投影，恢复 55 帧以上再开
+    S.fpsAcc += dtReal; S.fpsN++;
+    if (S.fpsAcc >= 1) {
+      const fps = S.fpsN / S.fpsAcc;
+      S.fpsHist.push(fps);
+      if (S.fpsHist.length > 4) S.fpsHist.shift();
+      HUD.updateFps(Math.round(fps), S.lowQuality);
+      S.fpsAcc = 0; S.fpsN = 0;
+      if (!S.lowQuality && S.fpsHist.length >= 3 && S.fpsHist.every(v => v < 40)) {
+        S.lowQuality = true;
+        Render.setQuality(true);
+      } else if (S.lowQuality && S.fpsHist.length >= 4 && S.fpsHist.every(v => v > 55)) {
+        S.lowQuality = false;
+        Render.setQuality(false);
+      }
+    }
     const me = myEntry(S.lastSnap);
     // 后坐力/落地压头衰减
     S.recoilP *= Math.max(0, 1 - dtReal * 7);

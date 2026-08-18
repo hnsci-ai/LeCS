@@ -172,7 +172,7 @@ const Render = (function () {
     renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); // 高 DPI 屏限制填充率，减少卡顿
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap; // 比 PCFSoft 快很多，视觉差异小
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.32;
@@ -223,7 +223,7 @@ const Render = (function () {
     sun = new THREE.DirectionalLight(0xfff4d8, 2.9);
     sun.position.set(38, 55, -30);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.mapSize.set(1024, 1024); // 2048→1024：阴影渲染像素减到 1/4
     sun.shadow.camera.left = -50; sun.shadow.camera.right = 50;
     sun.shadow.camera.top = 50; sun.shadow.camera.bottom = -50;
     sun.shadow.camera.far = 160;
@@ -610,6 +610,17 @@ const Render = (function () {
     renderer.setSize(w, h);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+  }
+
+  // ---------- 画质档位（自动降档：低档关闭阴影投影 + 像素比降到 1） ----------
+  let lowQuality = false;
+  function setQuality(low) {
+    if (low === lowQuality) return;
+    lowQuality = low;
+    renderer.shadowMap.enabled = !low;
+    renderer.shadowMap.needsUpdate = true;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, low ? 1 : 1.5));
+    onResize();
   }
 
   // ---------- 玩家模型 ----------
@@ -1170,9 +1181,12 @@ const Render = (function () {
   function getCamera() { return camera; }
 
   return {
-    init, renderFrame, updatePlayers, tracer, impact, muzzleFlash, shell, flashAt, explosion, getCamera, flinch, updateNades, updateSmokes, updateHostages, updateCrates, _debugCrates,
+    init, renderFrame, updatePlayers, tracer, impact, muzzleFlash, shell, flashAt, explosion, getCamera, flinch, updateNades, updateSmokes, updateHostages, updateCrates, setQuality, _debugCrates,
     // 测试辅助
     _debugTracerTotal: () => _tracerTotal,
+    _debugDrawCalls: () => renderer.info.render.calls,
+    _debugTriangles: () => renderer.info.render.triangles,
+    _debugShadowOn: () => renderer.shadowMap.enabled,
     _debugTracerActive: () => tracerPool.filter(t => t.life > 0).length,
     _debugMuzzleHasTex: () => muzzlePool.length > 0 && !!muzzlePool[0].mat.map,
     _debugPlayerGuns: () => {

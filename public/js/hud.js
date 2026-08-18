@@ -38,6 +38,7 @@ const HUD = (function () {
     el.sbTable = $('sb-table');
     el.sbRound = $('sb-round');
     el.lootPrompt = $('loot-prompt');
+    el.fpsVal = $('fps-val'); el.fpsMeter = $('fps-meter'); el.fpsMode = $('fps-mode');
     buildBuyMenu();
   }
 
@@ -330,9 +331,17 @@ const HUD = (function () {
     }
   }
 
+  // 每秒更新一次的帧率显示（low = 已自动降画质）
+  function updateFps(fps, low) {
+    if (!el.fpsVal) return;
+    el.fpsVal.textContent = fps;
+    el.fpsMeter.classList.toggle('low', fps < 30);
+    el.fpsMode.textContent = low ? '· 自动低画质' : '';
+  }
+
   return {
     init, updateGame, updateRadar, setKillfeed, showHit, showDamage,
     showMessage, showBanner, setRoomCode, showBuyMenu, refreshBuyMenu,
-    buyOpen, buyKey, showScoreboard, updateLootPrompt
+    buyOpen, buyKey, showScoreboard, updateLootPrompt, updateFps
   };
 })();
