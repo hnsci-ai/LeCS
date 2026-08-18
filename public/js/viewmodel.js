@@ -112,7 +112,7 @@ const VM = (function () {
         add(box(0.045, 0.075, 0.15, DARK, 0, 0.01, 0.1));
         add(box(0.03, 0.03, 0.34, DARK, 0, 0.05, -0.5));       // 枪管
         add(box(0.035, 0.035, 0.16, DARK, 0, 0.09, -0.28));    // 瞄准镜
-        add(box(0.016, 0.05, 0.03, DARK, 0, -0.02, 0.03));     // 拉栓        add(box(0.012, 0.04, 0.012, DARK, 0, 0.08, -0.62));   // 准星
+        const boltMesh = box(0.016, 0.05, 0.03, DARK, 0, -0.02, 0.03); add(boltMesh); // 拉栓        add(box(0.012, 0.04, 0.012, DARK, 0, 0.08, -0.62));   // 准星
         add(box(0.035, 0.09, 0.04, METAL, 0, -0.065, -0.16)); // 弹匣
         tip = { x: 0, y: 0.05, z: -0.7 };
         break;
@@ -248,7 +248,7 @@ const VM = (function () {
         add(box(0.045, 0.07, 0.34, METAL, 0, 0.02, -0.16));
         add(box(0.04, 0.065, 0.14, DARK, 0, 0.015, 0.08));
         add(box(0.028, 0.028, 0.3, DARK, 0, 0.045, -0.44));
-        add(box(0.03, 0.03, 0.14, DARK, 0, 0.085, -0.22));  // 瞄准镜        add(box(0.012, 0.025, 0.04, METAL, 0.03, 0.035, -0.14)); // 拉栓
+        add(box(0.03, 0.03, 0.14, DARK, 0, 0.085, -0.22));  // 瞄准镜        const boltMesh = box(0.012, 0.025, 0.04, METAL, 0.03, 0.035, -0.14); add(boltMesh); // 拉栓
         tip = { x: 0, y: 0.045, z: -0.6 };
         break;
       case 'g3sg1':
@@ -298,7 +298,7 @@ const VM = (function () {
         tip = { x: 0, y: 0.02, z: -0.14 };
       }
     }
-    return { root, tip };
+    return { root, tip, bolt: typeof boltMesh !== 'undefined' ? boltMesh : null };
   }
 
   function init(camera) {
@@ -380,16 +380,22 @@ const VM = (function () {
     }
   }
 
-  function setWeapon(id) {
-    if (!group) return;
-    if (cur) {
-      group.remove(cur.root);
-      cur = null;
-    }
+  let switchAnim = null; // {phase:'down'|'up', t:0, nextId}
+
+  function buildNow(id) {
     const b = build(id);
     addHands(b.root, id);
     group.add(b.root);
-    cur = { weapon: id, root: b.root, tip: b.tip, kick: 0, bobPhase: 0, reloadT: 0, switchT: 0, slash: 0 };
+    cur = { weapon: id, root: b.root, tip: b.tip, kick: 0, bobPhase: 0, reloadT: 0, slash: 0, bolt: b.bolt, boltT: 0, boltBaseZ: b.bolt ? b.bolt.position.z : 0 };
+  }
+
+  // 切枪：先下收旧枪，再上举新枪（约 0.3 秒）
+  function setWeapon(id) {
+    if (!group) return;
+    if (cur && cur.weapon === id) return;
+    if (switchAnim) { switchAnim.nextId = id; return; }
+    if (cur) { switchAnim = { phase: 'down', t: 0, nextId: id }; return; }
+    buildNow(id);
   }
 
   function setVisible(v) { if (group) group.visible = v; }
@@ -398,6 +404,7 @@ const VM = (function () {
     if (!cur) return;
     if (cur.weapon === 'knife') { cur.slash = 1; return; } // 匕首：挥砍，无火光
     cur.kick = 1;
+    if (cur.bolt) cur.boltT = 1; // 拉栓动画（AWP/Scout）
     // 枪口火光（星芒随机旋转/缩放 + 柔光）
     const sc = 0.17 + Math.random() * 0.09;
     muzzleStar.visible = true;
@@ -431,6 +438,29 @@ const VM = (function () {
     const bobY = Math.abs(Math.cos(cur.bobPhase)) * 0.005 * Math.min(1, sp * 0.5);
     const sway = Math.sin(performance.now() * 0.0013) * 0.0035;
 
+    // 切枪动画（下收/上举）
+    if (switchAnim) {
+      switchAnim.t += dt;
+      const pp = Math.min(1, switchAnim.t / 0.14);
+      if (switchAnim.phase === 'down') {
+        group.position.y = -0.25 - pp * 0.32;
+        if (pp >= 1) {
+          buildNow(switchAnim.nextId);
+          switchAnim.phase = 'up';
+          switchAnim.t = 0;
+        }
+      } else {
+        group.position.y = -0.57 + pp * 0.32;
+        if (pp >= 1) switchAnim = null;
+      }
+    }
+    // 拉栓动画（后拉-回位）
+    if (cur.boltT > 0) {
+      cur.boltT -= dt * 4.5;
+      const k = Math.sin((1 - Math.max(0, cur.boltT)) * Math.PI);
+      if (cur.bolt) cur.bolt.position.z = cur.boltBaseZ + k * 0.055;
+    }
+
     // 后坐力恢复
     cur.kick = Math.max(0, cur.kick - dt * 9);
     const kickZ = cur.kick * 0.09;
@@ -445,12 +475,17 @@ const VM = (function () {
       reloadTilt = p * 0.9;
     } else cur.reloadT = 0;
 
-    group.position.set(
-      0.27 + sway + bobX * 0.5 + kickX,
-      -0.25 + bobY - reloadDrop,
-      -0.42 + kickZ
-    );
-    group.rotation.set(reloadTilt, 0, cur.kick * 0.06);
+    if (!switchAnim) {
+      group.position.set(
+        0.27 + sway + bobX * 0.5 + kickX,
+        -0.25 + bobY - reloadDrop,
+        -0.42 + kickZ
+      );
+      group.rotation.set(reloadTilt, 0, cur.kick * 0.06);
+    } else {
+      group.position.x = 0.27;
+      group.rotation.set(0, 0, 0);
+    }
 
     // 匕首挥砍动画（斜劈弧线）
     if (cur.slash > 0) {

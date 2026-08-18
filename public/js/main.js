@@ -249,6 +249,7 @@ const Main = (function () {
         // 记录命中受害者的子弹方向（布娃娃死亡冲量用）
         if (kind === 2 && sh[11]) {
           Ragdoll.registerHit(sh[11], { x: hx, y: hy, z: hz }, { x, y, z }, wid);
+          Render.flinch(sh[11]); // 受击踉跄
         }
         // 观战时：目标开火同步第一人称枪口动画
         if (S.spectateId && !own) {
@@ -431,6 +432,8 @@ const Main = (function () {
       case 'damage':
         Audio.hurt();
         HUD.showDamage(ev.dir);
+        // 受击瞄准冲击（轻微上跳，CS 风格）
+        S.recoilP = Math.min(0.09, S.recoilP + 0.008 + (ev.dmg || 0) * 0.00015);
         break;
       case 'kill':
         if (ev.victim === S.myId) Audio.hurt();
