@@ -41,8 +41,8 @@
     // ---- 机枪 ----
     m249: { id: 'm249', name: 'M249 机枪', slot: 1, price: 5750, dmg: 32, rate: 12.5, range: 999, spread: 0.025, spreadMove: 0.05, spreadJump: 0.16, mag: 100, reserve: 200, reload: 5.0, team: null, auto: true, ammoPrice: 75, armorPen: 0.8, rangeMod: 0.97, penetration: 0.65 },
     hegrenade: { id: 'hegrenade', name: '高爆手雷', slot: 3, price: 300, dmg: 98, rate: 0.5, range: 999, spread: 0, mag: 1, reserve: 0, reload: 0, team: null, auto: false, armorPen: 1, rangeMod: 1, blastRadius: 4.6 },
-    flashbang: { id: 'flashbang', name: '闪光弹', slot: 3, price: 200, dmg: 0, rate: 0.5, range: 999, spread: 0, mag: 1, reserve: 0, reload: 0, team: null, auto: false, armorPen: 1, rangeMod: 1, blastRadius: 12, flashTime: 4 },
-    smokegrenade: { id: 'smokegrenade', name: '烟雾弹', slot: 3, price: 300, dmg: 0, rate: 0.5, range: 999, spread: 0, mag: 1, reserve: 0, reload: 0, team: null, auto: false, armorPen: 1, rangeMod: 1, blastRadius: 4.2, smokeTime: 14 }
+    flashbang: { id: 'flashbang', name: '闪光弹', slot: 3, price: 200, dmg: 0, rate: 0.5, range: 999, spread: 0, mag: 1, reserve: 0, reload: 0, team: null, auto: false, armorPen: 1, rangeMod: 1, blastRadius: 14, flashTime: 6 },
+    smokegrenade: { id: 'smokegrenade', name: '烟雾弹', slot: 3, price: 300, dmg: 0, rate: 0.5, range: 999, spread: 0, mag: 1, reserve: 0, reload: 0, team: null, auto: false, armorPen: 1, rangeMod: 1, blastRadius: 5.5, smokeTime: 22 }
   };
 
   // 购买菜单（CS 1.6 风格分组）

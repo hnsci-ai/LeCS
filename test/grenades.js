@@ -88,7 +88,7 @@ class Client {
   await sleep(3500);
   const flashEv = b.events.find(e => e.type === 'flash');
   console.log('  闪光事件:', JSON.stringify(flashEv));
-  check(!!flashEv && flashEv.duration > 0.3, '正对闪光的玩家被致盲（' + (flashEv ? flashEv.duration + 's' : '无') + '）✓');
+  check(!!flashEv && flashEv.duration >= 3, '正对闪光的玩家被致盲 ≥3 秒（' + (flashEv ? flashEv.duration + 's' : '无') + '）✓');
 
   console.log('== 4. 烟雾弹生成烟团 ==');
   for (let i = 0; i < 4 && a.me()[10] !== 'smokegrenade'; i++) { a.slot(4); await sleep(350); }
@@ -97,11 +97,16 @@ class Client {
   a.send({ t: 'input', seq: ++a.seq, keys: {}, yaw: -Math.PI / 2, pitch: 0, tClient: Date.now() });
   await sleep(4000);
   const smokes = a.last.smokes || [];
-  console.log('  烟团:', JSON.stringify(smokes));
-  check(smokes.length > 0 && smokes[0][3] > 1.5, '烟雾弹生成烟团并扩散（r=' + (smokes[0] ? smokes[0][3] : 0) + '）✓');
-  // 烟雾阻挡 Bot 视线由 bot 测试覆盖；这里验证烟团持续存在
-  await sleep(2000);
-  check((a.last.smokes || []).length > 0, '烟团持续存在（~14 秒）');
+  console.log('  烟团(4s):', JSON.stringify(smokes));
+  check(smokes.length > 0 && smokes[0][3] > 1.5, '烟雾弹生成烟团并开始扩散（r=' + (smokes[0] ? smokes[0][3] : 0) + '）✓');
+  // 再等扩散完成：3.5 秒后达到最大范围（新最大 5.5m）
+  await sleep(4000);
+  const smokes2 = a.last.smokes || [];
+  console.log('  烟团(8s):', JSON.stringify(smokes2));
+  check(smokes2.length > 0 && smokes2[0][3] >= 5.0, '烟雾扩散至大范围（r=' + (smokes2[0] ? smokes2[0][3] : 0) + '）✓');
+  // 烟雾阻挡 Bot 视线由 bot 测试覆盖；这里验证烟团持续存在（新时长 22 秒）
+  await sleep(7000); // 距投掷约 15 秒：旧时长 14 秒已过期
+  check((a.last.smokes || []).length > 0, '烟团持续存在（超过 15 秒）');
 
   console.log('== 5. 键盘 1-5 切枪（浏览器端）==');
   const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: ['--no-sandbox'] });

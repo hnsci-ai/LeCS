@@ -483,7 +483,8 @@ const Render = (function () {
         );
         const sc = 1.0 + r * 0.55 + ((si + k) % 5) * 0.14;
         sp.scale.set(sc, sc, 1);
-        sp.material.opacity = 0.26 + ((si + k * 2) % 3) * 0.07;
+        const lifeFrac = s[4] === undefined ? 1 : Math.max(0.15, s[4]); // 快照带剩余生命 → 临近消散渐隐
+        sp.material.opacity = (0.26 + ((si + k * 2) % 3) * 0.07) * (0.35 + 0.65 * lifeFrac);
       }
     });
     for (; idx < smokePool.length; idx++) smokePool[idx].visible = false;

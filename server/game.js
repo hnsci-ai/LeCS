@@ -1114,8 +1114,8 @@ class Game {
       const facing = Math.atan2(-dx, -dz);
       const facingFactor = Math.max(0, Math.cos(angDiffWrap(v.yaw, facing)));
       const distFactor = Math.max(0, 1 - d / radius);
-      const dur = 0.7 + maxTime * 0.75 * facingFactor * distFactor;
-      if (dur < 0.35) return;
+      const dur = 1.2 + maxTime * 0.8 * facingFactor * distFactor; // 正面近距离最长约 6 秒
+      if (dur < 0.5) return;
       v.blindUntil = Date.now() + dur * 1000;
       if (v.ws) this.sendEvent(v, { type: 'flash', duration: +dur.toFixed(1) });
     });
@@ -1125,9 +1125,9 @@ class Game {
   smokeExplode(n) {
     this.smokes.push({
       x: n.x, y: n.y, z: n.z,
-      r: 1.2, maxR: W.smokegrenade.blastRadius || 4.2,
-      born: Date.now(), life: (W.smokegrenade.smokeTime || 14) * 1000,
-      growUntil: Date.now() + 2500
+      r: 1.2, maxR: W.smokegrenade.blastRadius || 5.5,
+      born: Date.now(), life: (W.smokegrenade.smokeTime || 22) * 1000,
+      growUntil: Date.now() + 3500
     });
   }
 
@@ -1329,7 +1329,11 @@ class Game {
         this.bomb.timeLeft !== null ? +this.bomb.timeLeft.toFixed(1) : C.BOMB_TIME,
         this.bomb.site || '', this.bomb.carrier ? this.bomb.carrier.id : 0],
       nades: this.nades.map(n => [+n.x.toFixed(2), +n.y.toFixed(2), +n.z.toFixed(2), n.type || 'hegrenade']),
-      smokes: this.smokes.map(s => [+s.x.toFixed(1), +s.y.toFixed(1), +s.z.toFixed(1), +s.r.toFixed(1)]),
+      smokes: this.smokes.map(s => {
+        const nowS = Date.now();
+        return [+s.x.toFixed(1), +s.y.toFixed(1), +s.z.toFixed(1), +s.r.toFixed(1),
+          +Math.max(0, Math.min(1, (s.born + s.life - nowS) / s.life)).toFixed(2)];
+      }),
       hostages: this.hostages.map(h => [h.id, +h.x.toFixed(1), 0, +h.z.toFixed(1), +h.yaw.toFixed(2), h.state === 'follow' ? 1 : 0, h.leader ? h.leader.id : 0]),
       rescued: this.rescued,
       armsLadder: ARMS_LADDER,
