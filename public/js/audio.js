@@ -139,10 +139,22 @@ const Audio = (function () {
     burst({ freq: inOut ? 3200 : 2600, dur: 0.045, vol: 0.3, type: 'highpass' });
     burst({ freq: 900, dur: 0.05, vol: 0.15, type: 'lowpass' });
   }
+  function flashSound() {
+    // 闪光弹：高频耳鸣般的尖鸣
+    tone(1800, 1.2, 0.35, 'sine', 0, 4200);
+    tone(2400, 1.0, 0.2, 'sine', 0.05, 5200);
+    burst({ freq: 3000, dur: 0.2, vol: 0.3, type: 'highpass' });
+  }
+  function smokeSound() {
+    // 烟雾弹：闷响出烟声
+    burst({ freq: 500, dur: 0.5, vol: 0.4, type: 'lowpass' });
+    burst({ freq: 900, dur: 0.8, vol: 0.25, type: 'bandpass' });
+  }
 
   return {
     ensure, resume, gunshot, footsteps, reload, hit, hurt, explosion,
     bombBeep, roundEnd, roundStart, plantSound, throwSound, bounceSound, buySound, denySound, emptyClick, scopeSound,
+    flashSound, smokeSound,
     // 测试辅助
     _debugState: () => ({ created: !!ctx, state: ctx ? ctx.state : 'none', plays })
   };

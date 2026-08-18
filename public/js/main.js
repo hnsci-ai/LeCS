@@ -245,8 +245,9 @@ const Main = (function () {
     // 炸弹倒计时音
     if (snap.bomb && snap.bomb[0] === 'planted') Audio.bombBeep(snap.bomb[4]);
 
-    // 手雷渲染
+    // 手雷渲染 + 烟雾弹烟团
     if (snap.nades) Render.updateNades(snap.nades);
+    Render.updateSmokes(snap.smokes || []);
 
     HUD.setKillfeed(snap.killfeed);
 
@@ -407,9 +408,13 @@ const Main = (function () {
         break;
       case 'nade':
         if (ev.event === 'explode') {
-          Audio.explosion();
-          Render.explosion(ev.x, ev.y + 0.5, ev.z);
+          if (ev.nadeType === 'flashbang') { Audio.flashSound(); Render.flashAt(ev.x, ev.y + 0.5, ev.z, 6); }
+          else if (ev.nadeType === 'smokegrenade') Audio.smokeSound();
+          else { Audio.explosion(); Render.explosion(ev.x, ev.y + 0.5, ev.z); }
         }
+        break;
+      case 'flash':
+        showFlash(ev.duration);
         break;
       case 'buy':
         if (ev.ok) {
@@ -506,8 +511,8 @@ const Main = (function () {
     if (Input.takeEdge('removebot')) send({ t: 'removebot' });
 
     // 切枪（本地乐观 + 服务器权威）
-    const slot = Input.takeEdge('slot');
-    if (slot) {
+    const slot = Input.takeSlot(); // 数字槽位（修复：原 takeEdge 返回布尔导致 1-5 失效）
+    if (slot >= 1 && slot <= 5) {
       S.slotBuf = slot;
       const wid = S.inventory[slot];
       if (wid) VM.setWeapon(wid);
@@ -606,6 +611,18 @@ const Main = (function () {
       return { camX: target.x, camY: target.y + (target.crouch ? C.EYE_CROUCH : C.EYE_H), camZ: target.z, yaw: target.yaw, pitch: 0 };
     }
     return { camX: s.x, camY: s.y + 1.2, camZ: s.z, yaw: s.yaw, pitch: 0.2 };
+  }
+
+  // 闪光弹白屏：快速变白 → 按持续时间线性消退
+  function showFlash(dur) {
+    const el = document.getElementById('flash-overlay');
+    if (!el) return;
+    el.style.transition = 'opacity 70ms';
+    el.style.opacity = '0.96';
+    setTimeout(() => {
+      el.style.transition = 'opacity ' + Math.max(300, dur * 750) + 'ms linear';
+      el.style.opacity = '0';
+    }, 70);
   }
 
   function canBuy() {

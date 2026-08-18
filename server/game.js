@@ -11,6 +11,22 @@ let NEXT_ID = 1;
 
 function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
 
+function angDiffWrap(a, b) {
+  let d = (a - b) % (Math.PI * 2);
+  if (d > Math.PI) d -= Math.PI * 2;
+  if (d < -Math.PI) d += Math.PI * 2;
+  return d;
+}
+
+// 线段 (ax,az)-(bx,bz) 到圆心 (cx,cz) 的最短距离
+function segCircleDist(ax, az, bx, bz, cx, cz) {
+  const dx = bx - ax, dz = bz - az;
+  const len2 = dx * dx + dz * dz;
+  let t = len2 > 1e-9 ? ((cx - ax) * dx + (cz - az) * dz) / len2 : 0;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(cx - (ax + dx * t), cz - (az + dz * t));
+}
+
 class Game {
   constructor(code, mode) {
     this.code = code;
@@ -24,6 +40,7 @@ class Game {
     this.lossStreak = { t: 0, ct: 0 };
     this.bomb = { state: C.BOMB_HIDDEN, carrier: null, x: 0, y: 0, z: 0, site: null, timeLeft: C.BOMB_TIME };
     this.nades = [];
+    this.smokes = [];    // 烟雾弹烟团 [{x,y,z,r,born,life,growUntil}]
     this.shots = [];      // 本 tick 的枪声事件
     this.killfeed = [];   // 最近 6 条
     this.events = [];     // 待广播事件（每 tick 清空）
@@ -59,6 +76,8 @@ class Game {
       x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, h: C.PLAYER_H, eye: C.EYE_H,
       onGround: true, crouch: false,
       weapons: {}, curSlot: 1,
+      grenades: [], // 手雷背包（hegrenade/flashbang/smokegrenade，每种最多一颗）
+      blindUntil: 0,
       nextFire: 0, reloadEnd: 0, reloading: false,
       in: { f: false, b: false, l: false, r: false, walk: false, crouch: false, jump: false, use: false, fire: false, fireAlt: false, reload: false, slot: 0 },
       firePressed: false, fireAltPressed: false, fireWasDown: false,
@@ -178,7 +197,17 @@ class Game {
       target.vx = target.vy = target.vz = 0;
     } else if (msg.cmd === 'give') {
       const def = W[msg.weapon];
-      if (def) { target.weapons[def.slot] = { id: msg.weapon, mag: def.mag, reserve: def.reserve }; target.curSlot = def.slot; }
+      if (def) {
+        if (def.slot === 3) {
+          if (!target.grenades) target.grenades = [];
+          if (!target.grenades.includes(msg.weapon)) target.grenades.push(msg.weapon);
+          target.weapons[4] = { id: msg.weapon, mag: 1, reserve: 0 };
+          target.curSlot = 4;
+        } else {
+          target.weapons[def.slot] = { id: msg.weapon, mag: def.mag, reserve: def.reserve };
+          target.curSlot = def.slot;
+        }
+      }
     } else if (msg.cmd === 'money') {
       target.money = clamp(msg.amount || 0, 0, C.MAX_MONEY);
     }
@@ -215,6 +244,7 @@ class Game {
     this.timeLeft = this.mode === 'dm' ? 86400 : C.FREEZE_TIME;
     this.bomb = { state: C.BOMB_HIDDEN, carrier: null, x: 0, y: 0, z: 0, site: null, timeLeft: C.BOMB_TIME };
     this.nades = [];
+    this.smokes = [];
     const aliveTs = [];
     this.players.forEach(p => {
       p.history = [];
@@ -289,6 +319,7 @@ class Game {
   giveDefault(p) {
     const pistol = p.team === C.TEAM_T ? 'glock' : 'usp';
     p.weapons = { 2: { id: pistol, mag: W[pistol].mag, reserve: W[pistol].reserve }, 3: { id: 'knife', mag: 1, reserve: 0 } };
+    p.grenades = [];
     p.curSlot = 2;
   }
 
@@ -300,6 +331,7 @@ class Game {
       3: { id: 'knife', mag: 1, reserve: 0 },
       4: { id: 'hegrenade', mag: 1, reserve: 0 }
     };
+    p.grenades = ['hegrenade', 'flashbang', 'smokegrenade'];
     p.curSlot = 1;
     p.armor = C.MAX_ARMOR; p.helmet = true;
     if (p.team === C.TEAM_CT) p.defuseKit = true;
@@ -335,7 +367,12 @@ class Game {
       if (w.team !== null && w.team !== p.team) return { ok: false, reason: '本阵营无法购买' };
       if (w.slot === 1 && p.weapons[1] && p.weapons[1].id === id) return { ok: false, reason: '已拥有该武器' };
       if (w.slot === 2 && p.weapons[2] && p.weapons[2].id === id) return { ok: false, reason: '已拥有该武器' };
-      if (w.slot === 3 && p.weapons[4]) return { ok: false, reason: '已有手雷' };
+      if (w.slot === 3) {
+        // 手雷：每种最多一颗，共 3 颗
+        if (!p.grenades) p.grenades = [];
+        if (p.grenades.includes(id)) return { ok: false, reason: '已有该手雷' };
+        if (p.grenades.length >= 3) return { ok: false, reason: '手雷已满（最多3颗）' };
+      }
       cost = w.price;
     } else if (WPN.gear[id]) {
       const g = WPN.gear[id];
@@ -364,15 +401,21 @@ class Game {
       w.reserve = def.reserve; cost = def.ammoPrice;
     } else if (W[id]) {
       const def = W[id];
-      p.weapons[def.slot] = { id, mag: def.mag, reserve: def.reserve };
-      if (def.slot === 1 || def.slot === 2) p.curSlot = def.slot;
+      if (def.slot === 3) {
+        // 手雷入背包（不覆盖匕首！），并激活为当前手雷
+        if (!p.grenades) p.grenades = [];
+        if (!p.grenades.includes(id)) p.grenades.push(id);
+        p.weapons[4] = { id, mag: 1, reserve: 0 };
+      } else {
+        p.weapons[def.slot] = { id, mag: def.mag, reserve: def.reserve };
+        if (def.slot === 1 || def.slot === 2) p.curSlot = def.slot;
+      }
       cost = def.price;
     } else if (WPN.gear[id]) {
       cost = WPN.gear[id].price;
       if (id === 'kevlar') p.armor = C.MAX_ARMOR;
       if (id === 'helmet') p.helmet = true;
       if (id === 'defuse') p.defuseKit = true;
-      if (id === 'hegrenade') { if (!p.weapons[4]) p.weapons[4] = { id: 'hegrenade', mag: 1, reserve: 0 }; }
     }
     p.money = clamp(p.money - cost, 0, C.MAX_MONEY); // 双保险：扣款不越界
   }
@@ -421,6 +464,7 @@ class Game {
       this.processActions();
       this.tickBomb(dt);
       this.tickNades(dt);
+      this.tickSmokes(dt);
       this.checkRoundEnd();
       if (this.timeLeft <= 0) this.endRound('ct', '时间到');
     } else if (this.phase === C.STATE_END) {
@@ -430,6 +474,7 @@ class Game {
         if (p.bot && p.brain) p.brain.update(dt);
       });
       this.tickNades(dt);
+      this.tickSmokes(dt);
       this.processActions();
     }
 
@@ -455,7 +500,16 @@ class Game {
       const inp = p.in;
       if (inp.slot) {
         const s = inp.slot;
-        if (s >= 1 && s <= 5 && (p.weapons[s] || s === 3)) p.curSlot = s;
+        if (s === 4) {
+          // 手雷：按 4 切换到手雷；连按在手雷间循环（高爆→闪光→烟雾）
+          if (p.grenades && p.grenades.length) {
+            if (p.weapons[4] && p.curSlot === 4) p.grenades.push(p.grenades.shift());
+            p.weapons[4] = { id: p.grenades[0], mag: 1, reserve: 0 };
+            p.curSlot = 4;
+          }
+        } else if (s >= 1 && s <= 5 && (p.weapons[s] || s === 3)) {
+          p.curSlot = s;
+        }
         p.scoped = 0; // 切枪收镜
         inp.slot = 0;
       }
@@ -520,7 +574,7 @@ class Game {
     if (now < p.nextFire) return;
     if (w.id === 'knife') { this.knifeAttack(p, alt); return; }
     if (w.id === 'bomb') return;
-    if (w.id === 'hegrenade') { this.throwNade(p); return; }
+    if (w.id === 'hegrenade' || w.id === 'flashbang' || w.id === 'smokegrenade') { this.throwNade(p); return; }
     const def = W[w.id];
     if (w.mag <= 0) return;
     w.mag--;
@@ -702,16 +756,24 @@ class Game {
 
   // ---------- 手雷 ----------
   throwNade(p) {
+    const w = p.weapons[4];
+    const wid = w ? w.id : 'hegrenade';
     const dir = this.aimDir(p, 0);
     const sp = 13;
     this.nades.push({
-      id: NEXT_ID++, x: p.x + dir.x * 0.3, y: p.eye + dir.y * 0.3, z: p.z + dir.z * 0.3,
+      id: NEXT_ID++, type: wid,
+      x: p.x + dir.x * 0.3, y: p.eye + dir.y * 0.3, z: p.z + dir.z * 0.3,
       vx: dir.x * sp + p.vx * 0.5, vy: dir.y * sp + 2.5, vz: dir.z * sp + p.vz * 0.5,
       fuse: 2.0, owner: p, team: p.team
     });
-    delete p.weapons[4];
+    // 消耗当前手雷，切换到下一颗（或收回武器）
+    if (!p.grenades) p.grenades = [];
+    p.grenades = p.grenades.filter(g => g !== wid);
+    if (p.grenades.length) p.weapons[4] = { id: p.grenades[0], mag: 1, reserve: 0 };
+    else delete p.weapons[4];
     p.curSlot = p.weapons[1] ? 1 : 2;
-    this.emitEvent({ type: 'nade', event: 'throw', owner: p.id });
+    p.scoped = 0;
+    this.emitEvent({ type: 'nade', event: 'throw', owner: p.id, nadeType: wid });
   }
 
   tickNades(dt) {
@@ -740,7 +802,10 @@ class Game {
   }
 
   explode(n) {
-    this.emitEvent({ type: 'nade', event: 'explode', x: n.x, y: n.y, z: n.z });
+    this.emitEvent({ type: 'nade', event: 'explode', x: n.x, y: n.y, z: n.z, nadeType: n.type || 'hegrenade' });
+    if (n.type === 'flashbang') { this.flashExplode(n); return; }
+    if (n.type === 'smokegrenade') { this.smokeExplode(n); return; }
+    // 高爆手雷
     const radius = W.hegrenade.blastRadius || 4.6;
     this.players.forEach(v => {
       if (!v.alive) return;
@@ -754,6 +819,60 @@ class Game {
       // CS 1.6：手雷无视护甲
       this.applyDamage(v, n.owner, { dmg: dmg, armorPen: 1 }, 1, d, 1, 'hegrenade');
     });
+  }
+
+  // 闪光弹：正对闪光且无遮挡的玩家致盲（视野白屏 + Bot 无法索敌）
+  flashExplode(n) {
+    const radius = W.flashbang.blastRadius || 12;
+    const maxTime = W.flashbang.flashTime || 4;
+    this.players.forEach(v => {
+      if (!v.alive) return;
+      const dx = v.x - n.x, dz = v.z - n.z;
+      const d = Math.sqrt(dx * dx + dz * dz);
+      if (d > radius) return;
+      if (!MAP.losClear(n.x, n.y, n.z, v.x, v.eye, v.z, 0.15)) return;
+      // 面向角度：正对闪光 = 1，背对 = 0
+      const facing = Math.atan2(-dx, -dz);
+      const facingFactor = Math.max(0, Math.cos(angDiffWrap(v.yaw, facing)));
+      const distFactor = Math.max(0, 1 - d / radius);
+      const dur = 0.7 + maxTime * 0.75 * facingFactor * distFactor;
+      if (dur < 0.35) return;
+      v.blindUntil = Date.now() + dur * 1000;
+      if (v.ws) this.sendEvent(v, { type: 'flash', duration: +dur.toFixed(1) });
+    });
+  }
+
+  // 烟雾弹：生成烟团（阻挡 Bot 视线，持续约 14 秒）
+  smokeExplode(n) {
+    this.smokes.push({
+      x: n.x, y: n.y, z: n.z,
+      r: 1.2, maxR: W.smokegrenade.blastRadius || 4.2,
+      born: Date.now(), life: (W.smokegrenade.smokeTime || 14) * 1000,
+      growUntil: Date.now() + 2500
+    });
+  }
+
+  // 烟雾是否阻挡两点间视线（Bot 感知用；子弹照常穿过）
+  smokeBlocks(x1, y1, z1, x2, y2, z2) {
+    for (const s of this.smokes) {
+      if (segCircleDist(x1, z1, x2, z2, s.x, s.z) < s.r && Math.min(y1, y2) < 3.4) return true;
+    }
+    return false;
+  }
+
+  tickSmokes(dt) {
+    const now = Date.now();
+    for (let i = this.smokes.length - 1; i >= 0; i--) {
+      const s = this.smokes[i];
+      if (now - s.born > s.life) { this.smokes.splice(i, 1); continue; }
+      if (now < s.growUntil) {
+        const p = (now - s.born) / (s.growUntil - s.born);
+        s.r = 1.2 + (s.maxR - 1.2) * Math.min(1, p);
+      }
+      // 轻微漂移
+      s.x += Math.sin(now / 900 + i) * 0.002;
+      s.z += Math.cos(now / 1100 + i) * 0.002;
+    }
   }
 
   // ---------- C4 ----------
@@ -923,7 +1042,8 @@ class Game {
       bomb: [this.bomb.state, +this.bomb.x.toFixed(1), +this.bomb.y.toFixed(1), +this.bomb.z.toFixed(1),
         this.bomb.timeLeft !== null ? +this.bomb.timeLeft.toFixed(1) : C.BOMB_TIME,
         this.bomb.site || '', this.bomb.carrier ? this.bomb.carrier.id : 0],
-      nades: this.nades.map(n => [+n.x.toFixed(2), +n.y.toFixed(2), +n.z.toFixed(2)]),
+      nades: this.nades.map(n => [+n.x.toFixed(2), +n.y.toFixed(2), +n.z.toFixed(2), n.type || 'hegrenade']),
+      smokes: this.smokes.map(s => [+s.x.toFixed(1), +s.y.toFixed(1), +s.z.toFixed(1), +s.r.toFixed(1)]),
       shots: this.shots,
       killfeed: this.killfeed
     };

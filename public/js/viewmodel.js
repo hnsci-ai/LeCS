@@ -139,6 +139,20 @@ const VM = (function () {
         tip = { x: 0, y: 0.03, z: -0.12 };
         break;
       }
+      case 'flashbang': {
+        const s = new THREE.Mesh(new THREE.SphereGeometry(0.045, 12, 10),
+          new THREE.MeshLambertMaterial({ color: 0xb8c4cc }));
+        s.position.set(0, 0.03, -0.08);
+        add(s);
+        add(box(0.02, 0.05, 0.012, DARK, 0, 0.085, -0.08));
+        tip = { x: 0, y: 0.03, z: -0.12 };
+        break;
+      }
+      case 'smokegrenade':
+        add(box(0.06, 0.13, 0.06, new THREE.MeshLambertMaterial({ color: 0x3f5238 }), 0, 0.03, -0.08));
+        add(box(0.02, 0.04, 0.012, DARK, 0, 0.11, -0.08));
+        tip = { x: 0, y: 0.03, z: -0.12 };
+        break;
       default: { // bomb
         add(box(0.09, 0.06, 0.13, DARK, 0, 0.02, -0.06));
         add(box(0.075, 0.05, 0.1, METAL, 0, 0.005, -0.06));

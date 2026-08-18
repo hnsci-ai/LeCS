@@ -164,6 +164,7 @@ const Render = (function () {
 
     buildMap();
     buildPools();
+    initSmoke();
     Ragdoll.init(scene);
     window.addEventListener('resize', onResize);
     onResize();
@@ -234,6 +235,53 @@ const Render = (function () {
       d.castShadow = true;
       scene.add(d);
     }
+  }
+
+  // ---------- 烟雾弹烟团 ----------
+  const smokePool = [];
+  let smokeTex = null;
+  function initSmoke() {
+    const c = makeCanvas(64, 64, (g, w, h) => {
+      const grad = g.createRadialGradient(w / 2, h / 2, 2, w / 2, h / 2, w / 2);
+      grad.addColorStop(0, 'rgba(200,200,205,0.85)');
+      grad.addColorStop(0.55, 'rgba(160,160,168,0.5)');
+      grad.addColorStop(1, 'rgba(140,140,150,0)');
+      g.fillStyle = grad;
+      g.fillRect(0, 0, w, h);
+    });
+    smokeTex = new THREE.CanvasTexture(c);
+    smokeTex.colorSpace = THREE.SRGBColorSpace;
+    for (let i = 0; i < 48; i++) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: smokeTex, transparent: true, opacity: 0, depthWrite: false
+      }));
+      sp.visible = false;
+      scene.add(sp);
+      smokePool.push(sp);
+    }
+  }
+
+  function updateSmokes(list) {
+    if (!smokePool.length) return;
+    let idx = 0;
+    list.forEach((s, si) => {
+      const x = s[0], y = s[1], z = s[2], r = s[3];
+      for (let k = 0; k < 6 && idx < smokePool.length; k++) {
+        const sp = smokePool[idx++];
+        sp.visible = true;
+        const a = si * 2.399 + k * 2.094;
+        const rr = r * (0.25 + 0.75 * (((si * 7 + k * 13) % 10) / 10));
+        sp.position.set(
+          x + Math.cos(a) * rr,
+          y + 0.25 + (((si * 3 + k * 5) % 10) / 10) * 2.6,
+          z + Math.sin(a) * rr
+        );
+        const sc = 1.0 + r * 0.55 + ((si + k) % 5) * 0.14;
+        sp.scale.set(sc, sc, 1);
+        sp.material.opacity = 0.26 + ((si + k * 2) % 3) * 0.07;
+      }
+    });
+    for (; idx < smokePool.length; idx++) smokePool[idx].visible = false;
   }
 
   function buildPools() {
@@ -429,6 +477,16 @@ const Render = (function () {
         g.add(s);
         break;
       }
+      case 'flashbang': {
+        const s = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), new THREE.MeshLambertMaterial({ color: 0xb8c4cc }));
+        s.position.set(0, 0.02, -0.05);
+        s.castShadow = true;
+        g.add(s);
+        break;
+      }
+      case 'smokegrenade':
+        b(0.08, 0.16, 0.08, new THREE.MeshLambertMaterial({ color: 0x3f5238 }), 0, 0.02, -0.05);
+        break;
       default: { // bomb
         b(0.1, 0.07, 0.15, dark, 0, 0.02, -0.04);
         b(0.08, 0.05, 0.11, metal, 0, 0.005, -0.04);
@@ -790,7 +848,7 @@ const Render = (function () {
   function getCamera() { return camera; }
 
   return {
-    init, renderFrame, updatePlayers, tracer, impact, muzzleFlash, shell, flashAt, explosion, getCamera, updateNades,
+    init, renderFrame, updatePlayers, tracer, impact, muzzleFlash, shell, flashAt, explosion, getCamera, updateNades, updateSmokes,
     // 测试辅助
     _debugTracerTotal: () => _tracerTotal,
     _debugTracerActive: () => tracerPool.filter(t => t.life > 0).length,

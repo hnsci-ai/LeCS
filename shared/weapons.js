@@ -19,7 +19,9 @@
     ak47: { id: 'ak47', name: 'AK-47', slot: 1, price: 2500, dmg: 36, rate: 10, range: 999, spread: 0.013, spreadMove: 0.04, spreadJump: 0.11, mag: 30, reserve: 90, reload: 2.5, team: 0, auto: true, ammoPrice: 60, armorPen: 0.75, rangeMod: 0.98, penetration: 0.65 },
     m4a1: { id: 'm4a1', name: 'M4A1', slot: 1, price: 3100, dmg: 32, rate: 11.4, range: 999, spread: 0.011, spreadMove: 0.033, spreadJump: 0.09, mag: 30, reserve: 90, reload: 3.0, team: 1, auto: true, ammoPrice: 60, armorPen: 0.7, rangeMod: 0.97, penetration: 0.6 },
     awp: { id: 'awp', name: 'AWP', slot: 1, price: 4750, dmg: 115, rate: 0.74, range: 999, spread: 0.002, spreadMove: 0.09, spreadJump: 0.2, mag: 10, reserve: 30, reload: 3.6, team: null, auto: false, ammoPrice: 125, bolt: 1.0, armorPen: 0.99, rangeMod: 0.99, penetration: 0.7 },
-    hegrenade: { id: 'hegrenade', name: '高爆手雷', slot: 3, price: 300, dmg: 98, rate: 0.5, range: 999, spread: 0, mag: 1, reserve: 0, reload: 0, team: null, auto: false, armorPen: 1, rangeMod: 1, blastRadius: 4.6 }
+    hegrenade: { id: 'hegrenade', name: '高爆手雷', slot: 3, price: 300, dmg: 98, rate: 0.5, range: 999, spread: 0, mag: 1, reserve: 0, reload: 0, team: null, auto: false, armorPen: 1, rangeMod: 1, blastRadius: 4.6 },
+    flashbang: { id: 'flashbang', name: '闪光弹', slot: 3, price: 200, dmg: 0, rate: 0.5, range: 999, spread: 0, mag: 1, reserve: 0, reload: 0, team: null, auto: false, armorPen: 1, rangeMod: 1, blastRadius: 12, flashTime: 4 },
+    smokegrenade: { id: 'smokegrenade', name: '烟雾弹', slot: 3, price: 300, dmg: 0, rate: 0.5, range: 999, spread: 0, mag: 1, reserve: 0, reload: 0, team: null, auto: false, armorPen: 1, rangeMod: 1, blastRadius: 4.2, smokeTime: 14 }
   };
 
   // 购买菜单（CS 1.6 风格分组）
@@ -28,7 +30,7 @@
     { name: '冲锋枪', items: ['mp5'] },
     { name: '步枪', items: ['ak47', 'm4a1'] },
     { name: '狙击枪', items: ['awp'] },
-    { name: '装备', items: ['kevlar', 'helmet', 'defuse', 'hegrenade'] },
+    { name: '装备', items: ['kevlar', 'helmet', 'defuse', 'hegrenade', 'flashbang', 'smokegrenade'] },
     { name: '弹药', items: ['ammo'] }
   ];
 

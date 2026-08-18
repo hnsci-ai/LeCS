@@ -72,6 +72,19 @@ class BotBrain {
       this.bought = true;
       this.autoBuy();
     }
+    // 闪光致盲期间无法索敌（仍会按目标点移动）
+    if (p.blindUntil && Date.now() < p.blindUntil) {
+      this.target = null;
+      this._lastT = null;
+      this.goal = this.chooseGoal();
+      this.repathTimer -= 0.15;
+      if (!this.path || this.repathTimer <= 0) {
+        this.repathTimer = 0.8 + Math.random() * 0.5;
+        this.path = MAP.findPathSmooth(p.x, p.z, this.goal.x, this.goal.z);
+        this.pathIdx = 0;
+      }
+      return;
+    }
     // 感知：找最近可见敌人
     this.target = null;
     let bestD = this.diff.viewRange;
@@ -81,6 +94,7 @@ class BotBrain {
       const d = Math.sqrt(dx * dx + dz * dz);
       if (d > bestD) return;
       if (!MAP.losClear(p.x, p.eye, p.z, v.x, v.eye, v.z, 0.2)) return;
+      if (this.game.smokeBlocks && this.game.smokeBlocks(p.x, p.eye, p.z, v.x, v.eye, v.z)) return; // 烟雾遮断视线
       // 视野角
       const ang = Math.atan2(-dx, -dz);
       const fov = Math.abs(angDiff(ang, p.yaw));

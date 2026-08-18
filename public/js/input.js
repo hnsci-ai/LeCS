@@ -89,6 +89,9 @@ const Input = (function () {
 
   function takeEdge(name) { const v = edges[name]; edges[name] = false; return !!v; }
 
+  // 取武器槽位数字（1-5）——不能用 takeEdge（会转布尔丢失数值）
+  function takeSlot() { const v = edges.slot; edges.slot = 0; return v || 0; }
+
   // 构建一次发送的按键对象
   function snapshot() {
     const fa = fireAltEdge;
@@ -113,6 +116,7 @@ const Input = (function () {
     locked: () => locked,
     snapshot,
     takeEdge,
+    takeSlot,
     clearAll
   };
 })();
