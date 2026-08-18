@@ -51,13 +51,13 @@ function check(cond, msg) { if (cond) console.log('  ✓ ' + msg); else { failur
 
   // 击杀 bot → 布娃娃生成
   ctl.send(JSON.stringify({ t: 'dev', cmd: 'dmg', id: botId, amount: 1000 }));
-  await sleep(1300);
+  await sleep(800);
   const c1 = await page.evaluate(() => Ragdoll._debugCount());
   console.log('  击杀后活跃布娃娃数:', c1);
   check(c1 >= 1, '击杀后生成布娃娃尸体');
 
-  // 物理下落：2.5 秒后 torso 高度应明显下降
-  await sleep(2500);
+  // 物理下落：0.7 秒后 torso 高度应明显下降（尸体约 2 秒后淡出）
+  await sleep(700);
   const st = await page.evaluate(() => Ragdoll._debugState());
   if (st.length) {
     console.log('  布娃娃状态:', JSON.stringify(st));

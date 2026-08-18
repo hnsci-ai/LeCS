@@ -6,9 +6,30 @@ const VM = (function () {
   let muzzleStar = null; // 星芒火光
   let muzzleGlow = null; // 柔光
   let muzzleLight = null;
-  const DARK = new THREE.MeshLambertMaterial({ color: 0x22252a });
-  const METAL = new THREE.MeshLambertMaterial({ color: 0x3a3f46 });
-  const WOOD = new THREE.MeshLambertMaterial({ color: 0x7a5230 });
+  // 程序化枪械材质（金属/木质纹理）
+  function matTexture(base, grain) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d');
+    g.fillStyle = base; g.fillRect(0, 0, 64, 64);
+    for (let i = 0; i < 480; i++) {
+      const v = 20 + Math.random() * 40 | 0;
+      g.fillStyle = `rgba(${v},${v + 4},${v + 8},0.15)`;
+      g.fillRect(Math.random() * 64, Math.random() * 64, 1.4, 1.4);
+    }
+    if (grain) {
+      for (let y = 0; y < 64; y += 4) {
+        g.fillStyle = 'rgba(60,35,15,0.18)';
+        g.fillRect(0, y, 64, 1.4);
+      }
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  }
+  const DARK = new THREE.MeshLambertMaterial({ map: matTexture('#22252a', false), color: 0xaab0b8 });
+  const METAL = new THREE.MeshLambertMaterial({ map: matTexture('#3a3f46', false), color: 0xcdd2da });
+  const WOOD = new THREE.MeshLambertMaterial({ map: matTexture('#7a5230', true), color: 0xd8b080 });
 
   function box(w, h, d, mat, x, y, z) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
@@ -71,7 +92,8 @@ const VM = (function () {
         add(box(0.028, 0.028, 0.24, DARK, 0, 0.045, -0.42));   // 枪管
         add(box(0.018, 0.05, 0.014, DARK, 0, 0.085, -0.5));    // 准星
         add(box(0.05, 0.035, 0.09, WOOD, 0, -0.02, -0.28));    // 护木
-        add(box(0.014, 0.045, 0.02, DARK, 0, -0.055, -0.15));  // 握把
+        add(box(0.014, 0.045, 0.02, DARK, 0, -0.055, -0.15));  // 握把        add(box(0.024, 0.035, 0.016, DARK, 0, 0.075, -0.08));   // 照门
+        add(box(0.012, 0.03, 0.05, METAL, 0.03, 0.035, -0.12));  // 拉机柄
         tip = { x: 0, y: 0.045, z: -0.56 };
         break;
       }
@@ -81,7 +103,7 @@ const VM = (function () {
         add(box(0.04, 0.1, 0.05, METAL, 0, -0.055, -0.12));
         add(box(0.032, 0.032, 0.3, DARK, 0, 0.045, -0.42));    // 消音器
         add(box(0.02, 0.05, 0.014, DARK, 0, 0.08, -0.3));      // 准星
-        add(box(0.03, 0.03, 0.05, DARK, 0, 0.1, -0.28));       // 提把
+        add(box(0.03, 0.03, 0.05, DARK, 0, 0.1, -0.28));       // 提把        add(box(0.022, 0.032, 0.016, DARK, 0, 0.07, -0.12));   // 照门
         tip = { x: 0, y: 0.045, z: -0.6 };
         break;
       }
@@ -90,7 +112,7 @@ const VM = (function () {
         add(box(0.045, 0.075, 0.15, DARK, 0, 0.01, 0.1));
         add(box(0.03, 0.03, 0.34, DARK, 0, 0.05, -0.5));       // 枪管
         add(box(0.035, 0.035, 0.16, DARK, 0, 0.09, -0.28));    // 瞄准镜
-        add(box(0.016, 0.05, 0.03, DARK, 0, -0.02, 0.03));     // 拉栓
+        add(box(0.016, 0.05, 0.03, DARK, 0, -0.02, 0.03));     // 拉栓        add(box(0.012, 0.04, 0.012, DARK, 0, 0.08, -0.62));   // 准星
         add(box(0.035, 0.09, 0.04, METAL, 0, -0.065, -0.16)); // 弹匣
         tip = { x: 0, y: 0.05, z: -0.7 };
         break;
@@ -99,28 +121,28 @@ const VM = (function () {
         add(box(0.05, 0.075, 0.26, METAL, 0, 0.02, -0.14));
         add(box(0.045, 0.075, 0.12, DARK, 0, 0.015, 0.07));
         add(box(0.04, 0.12, 0.045, METAL, 0, -0.07, -0.1));
-        add(box(0.03, 0.03, 0.16, DARK, 0, 0.045, -0.32));
+        add(box(0.03, 0.03, 0.16, DARK, 0, 0.045, -0.32));        add(box(0.022, 0.03, 0.014, DARK, 0, 0.068, -0.06));  // 照门
         tip = { x: 0, y: 0.045, z: -0.44 };
         break;
       }
       case 'deagle': {
         add(box(0.04, 0.055, 0.22, METAL, 0, 0.03, -0.1));
         add(box(0.038, 0.05, 0.2, DARK, 0, 0.075, -0.1));      // 套筒
-        add(box(0.035, 0.11, 0.045, DARK, 0, -0.045, 0.02));   // 握把
+        add(box(0.035, 0.11, 0.045, DARK, 0, -0.045, 0.02));        add(box(0.01, 0.022, 0.026, METAL, 0, 0.082, 0.03));   // 击锤   // 握把        add(box(0.012, 0.025, 0.03, METAL, 0, 0.085, 0.03));   // 击锤
         tip = { x: 0, y: 0.075, z: -0.24 };
         break;
       }
       case 'usp': {
         add(box(0.038, 0.05, 0.18, METAL, 0, 0.03, -0.08));
         add(box(0.034, 0.045, 0.16, DARK, 0, 0.068, -0.08));
-        add(box(0.03, 0.1, 0.04, DARK, 0, -0.04, 0.02));
+        add(box(0.03, 0.1, 0.04, DARK, 0, -0.04, 0.02));        add(box(0.01, 0.022, 0.026, METAL, 0, 0.078, 0.03));   // 击锤
         tip = { x: 0, y: 0.068, z: -0.2 };
         break;
       }
       case 'glock': {
         add(box(0.042, 0.05, 0.16, DARK, 0, 0.03, -0.06));
         add(box(0.034, 0.045, 0.13, METAL, 0, 0.06, -0.06));
-        add(box(0.032, 0.1, 0.04, DARK, 0, -0.04, 0.02));
+        add(box(0.032, 0.1, 0.04, DARK, 0, -0.04, 0.02));        add(box(0.014, 0.02, 0.02, DARK, 0, 0.062, -0.1));     // 照门
         tip = { x: 0, y: 0.06, z: -0.18 };
         break;
       }
@@ -149,7 +171,7 @@ const VM = (function () {
       case 'fiveseven':
         add(box(0.042, 0.055, 0.26, METAL, 0, 0.03, -0.11));
         add(box(0.04, 0.05, 0.24, DARK, 0, 0.075, -0.11));
-        add(box(0.036, 0.11, 0.045, DARK, 0, -0.045, 0.02));
+        add(box(0.036, 0.11, 0.045, DARK, 0, -0.045, 0.02));        add(box(0.01, 0.02, 0.026, METAL, 0, 0.082, 0.03));    // 击锤
         tip = { x: 0, y: 0.075, z: -0.28 };
         break;
       case 'elites': {
@@ -194,14 +216,14 @@ const VM = (function () {
         add(box(0.045, 0.075, 0.15, DARK, 0, 0.015, 0.1));
         add(box(0.04, 0.11, 0.05, METAL, 0, -0.06, -0.14));
         add(box(0.03, 0.03, 0.3, DARK, 0, 0.045, -0.46));
-        add(box(0.012, 0.02, 0.03, DARK, 0, 0.03, 0.02));  // 拉机柄
+        add(box(0.012, 0.02, 0.03, DARK, 0, 0.03, 0.02));  // 拉机柄        add(box(0.02, 0.03, 0.014, DARK, 0, 0.072, -0.08));    // 照门
         tip = { x: 0, y: 0.045, z: -0.62 };
         break;
       case 'famas':
         add(box(0.055, 0.08, 0.32, METAL, 0, 0.02, -0.14));
         add(box(0.045, 0.075, 0.13, DARK, 0, 0.015, 0.08));
         add(box(0.04, 0.12, 0.05, METAL, 0, -0.07, -0.1));
-        add(box(0.03, 0.04, 0.1, DARK, 0, 0.09, -0.1));     // 提把
+        add(box(0.03, 0.04, 0.1, DARK, 0, 0.09, -0.1));     // 提把        add(box(0.02, 0.028, 0.014, DARK, 0, 0.068, -0.06));   // 照门
         add(box(0.03, 0.03, 0.2, DARK, 0, 0.045, -0.36));
         tip = { x: 0, y: 0.045, z: -0.48 };
         break;
@@ -210,14 +232,14 @@ const VM = (function () {
         add(box(0.045, 0.075, 0.12, DARK, 0, 0.015, 0.08));
         add(box(0.04, 0.11, 0.05, METAL, 0, -0.065, -0.08));
         add(box(0.03, 0.03, 0.18, DARK, 0, 0.05, -0.3));
-        add(box(0.02, 0.035, 0.05, DARK, 0, 0.09, -0.05));  // 顶部瞄准
+        add(box(0.02, 0.035, 0.05, DARK, 0, 0.09, -0.05));  // 顶部瞄准        add(box(0.018, 0.026, 0.014, DARK, 0, 0.066, -0.1));   // 照门
         tip = { x: 0, y: 0.05, z: -0.42 };
         break;
       case 'aug':
         add(box(0.055, 0.08, 0.32, METAL, 0, 0.02, -0.14));
         add(box(0.045, 0.075, 0.13, DARK, 0, 0.015, 0.08));
         add(box(0.04, 0.12, 0.05, METAL, 0, -0.07, -0.1));
-        add(box(0.035, 0.04, 0.16, DARK, 0, 0.1, -0.08));   // 顶部瞄准镜
+        add(box(0.035, 0.04, 0.16, DARK, 0, 0.1, -0.08));   // 顶部瞄准镜        add(box(0.012, 0.035, 0.012, DARK, 0, 0.07, -0.42));   // 准星
         add(box(0.03, 0.03, 0.2, DARK, 0, 0.045, -0.36));
         tip = { x: 0, y: 0.045, z: -0.48 };
         break;
@@ -226,7 +248,7 @@ const VM = (function () {
         add(box(0.045, 0.07, 0.34, METAL, 0, 0.02, -0.16));
         add(box(0.04, 0.065, 0.14, DARK, 0, 0.015, 0.08));
         add(box(0.028, 0.028, 0.3, DARK, 0, 0.045, -0.44));
-        add(box(0.03, 0.03, 0.14, DARK, 0, 0.085, -0.22));  // 瞄准镜
+        add(box(0.03, 0.03, 0.14, DARK, 0, 0.085, -0.22));  // 瞄准镜        add(box(0.012, 0.025, 0.04, METAL, 0.03, 0.035, -0.14)); // 拉栓
         tip = { x: 0, y: 0.045, z: -0.6 };
         break;
       case 'g3sg1':
@@ -234,7 +256,7 @@ const VM = (function () {
         add(box(0.045, 0.075, 0.15, DARK, 0, 0.01, 0.1));
         add(box(0.035, 0.12, 0.05, METAL, 0, -0.07, -0.14));
         add(box(0.03, 0.03, 0.32, DARK, 0, 0.05, -0.5));
-        add(box(0.035, 0.04, 0.15, DARK, 0, 0.1, -0.24));   // 瞄准镜
+        add(box(0.035, 0.04, 0.15, DARK, 0, 0.1, -0.24));   // 瞄准镜        add(box(0.012, 0.04, 0.012, DARK, 0, 0.078, -0.62));   // 准星
         tip = { x: 0, y: 0.05, z: -0.68 };
         break;
       case 'sg550':
@@ -242,7 +264,7 @@ const VM = (function () {
         add(box(0.045, 0.075, 0.15, DARK, 0, 0.01, 0.1));
         add(box(0.035, 0.12, 0.05, METAL, 0, -0.07, -0.14));
         add(box(0.03, 0.03, 0.3, DARK, 0, 0.05, -0.48));
-        add(box(0.035, 0.04, 0.14, DARK, 0, 0.1, -0.22));
+        add(box(0.035, 0.04, 0.14, DARK, 0, 0.1, -0.22));        add(box(0.012, 0.04, 0.012, DARK, 0, 0.078, -0.6));    // 准星
         tip = { x: 0, y: 0.05, z: -0.66 };
         break;
       // ---- 机枪 ----
@@ -251,7 +273,7 @@ const VM = (function () {
         add(box(0.05, 0.08, 0.16, DARK, 0, 0.01, 0.1));
         add(box(0.07, 0.1, 0.09, DARK, 0, -0.07, -0.05));   // 弹药箱
         add(box(0.035, 0.035, 0.34, DARK, 0, 0.05, -0.5));  // 粗枪管
-        add(box(0.012, 0.03, 0.05, DARK, 0, 0.1, -0.3));    // 准星
+        add(box(0.012, 0.03, 0.05, DARK, 0, 0.1, -0.3));    // 准星        add(box(0.02, 0.03, 0.016, DARK, 0, 0.075, -0.08));    // 照门
         tip = { x: 0, y: 0.05, z: -0.68 };
         break;
       case 'flashbang': {

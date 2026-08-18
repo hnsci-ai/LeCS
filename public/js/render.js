@@ -100,6 +100,70 @@ const Render = (function () {
     return t;
   }
 
+  // 布料纹理（织纹 + 噪点）
+  function clothTexture(base) {
+    const c = makeCanvas(64, 64, (g, w, h) => {
+      g.fillStyle = base; g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 320; i++) {
+        g.fillStyle = Math.random() < 0.5 ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.06)';
+        g.fillRect(Math.random() * w, Math.random() * h, 1.6, 1.6);
+      }
+      for (let y = 0; y < h; y += 4) { g.fillStyle = 'rgba(0,0,0,0.07)'; g.fillRect(0, y, w, 1); }
+    });
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  }
+  function vestTexture(base) {
+    const c = makeCanvas(64, 64, (g, w, h) => {
+      g.fillStyle = base; g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 260; i++) {
+        g.fillStyle = 'rgba(0,0,0,0.12)';
+        g.fillRect(Math.random() * w, Math.random() * h, 2, 2);
+      }
+      // 战术缝线
+      g.strokeStyle = 'rgba(0,0,0,0.3)'; g.lineWidth = 2;
+      g.strokeRect(8, 8, w - 16, h - 16);
+      g.beginPath(); g.moveTo(8, h / 2); g.lineTo(w - 8, h / 2); g.stroke();
+    });
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  }
+  function gunMetalTexture() {
+    const c = makeCanvas(64, 64, (g, w, h) => {
+      g.fillStyle = '#31363d'; g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 500; i++) {
+        const v = 30 + Math.random() * 40 | 0;
+        g.fillStyle = `rgba(${v},${v + 4},${v + 8},${0.12 + Math.random() * 0.2})`;
+        g.fillRect(Math.random() * w, Math.random() * h, 1.4, 1.4);
+      }
+      for (let i = 0; i < 14; i++) {
+        g.strokeStyle = 'rgba(255,255,255,0.06)'; g.lineWidth = 1;
+        g.beginPath(); g.moveTo(Math.random() * w, Math.random() * h); g.lineTo(Math.random() * w, Math.random() * h); g.stroke();
+      }
+    });
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  }
+  function gunWoodTexture() {
+    const c = makeCanvas(64, 64, (g, w, h) => {
+      g.fillStyle = '#6e4a2c'; g.fillRect(0, 0, w, h);
+      for (let y = 0; y < h; y += 5) {
+        g.fillStyle = `rgba(50,30,12,${0.12 + Math.random() * 0.2})`;
+        g.fillRect(0, y, w, 1.6);
+      }
+      for (let i = 0; i < 240; i++) {
+        g.fillStyle = 'rgba(255,220,160,0.05)';
+        g.fillRect(Math.random() * w, Math.random() * h, 1.2, 1.2);
+      }
+    });
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  }
+
   // 枪口火光星芒贴图（canvas 生成）
   function muzzleFlashTexture() {
     const c = makeCanvas(128, 128, (g, w, h) => {
@@ -585,9 +649,10 @@ const Render = (function () {
     if (!id) return null;
     if (thirdGunCache.has(id)) return thirdGunCache.get(id);
     const g = new THREE.Group();
-    const dark = new THREE.MeshLambertMaterial({ color: 0x23262b });
-    const metal = new THREE.MeshLambertMaterial({ color: 0x4a505a });
-    const wood = new THREE.MeshLambertMaterial({ color: 0x6e4a2c });
+    const tDark = new THREE.MeshLambertMaterial({ map: gunMetalTexture(), color: 0x9aa0aa });
+    const tMetal = new THREE.MeshLambertMaterial({ map: gunMetalTexture(), color: 0xc2c8d0 });
+    const tPoly = new THREE.MeshLambertMaterial({ color: 0x23262b });
+    const tWood = new THREE.MeshLambertMaterial({ map: gunWoodTexture(), color: 0xc8a070 });
     const b = (w, h, d, mat, x, y, z) => {
       const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
       m.position.set(x, y, z);
@@ -595,126 +660,160 @@ const Render = (function () {
       g.add(m);
       return m;
     };
+    // 枪械通用件：枪管/弹匣/瞄准具/枪托
+    const barrel = (len, cal) => b(cal, cal, len, tDark, 0, 0.05, -0.12 - len / 2);
+    const mag = (w, h, dz, y) => b(w, h, dz, tMetal, 0, y, -0.05);
+    const stock = (len) => b(0.05, 0.08, len, tPoly, 0, 0.015, 0.05 + len / 2);
+    const frontSight = () => b(0.018, 0.05, 0.014, tDark, 0, 0.105, -0.32);
+    const rearSight = () => b(0.024, 0.04, 0.02, tDark, 0, 0.1, -0.06);
     switch (id) {
       case 'ak47':
-        b(0.06, 0.085, 0.44, metal, 0, 0.02, -0.16);   // 机匣
-        b(0.05, 0.08, 0.16, wood, 0, 0.01, 0.13);      // 枪托
-        b(0.045, 0.13, 0.06, metal, 0, -0.075, -0.12); // 弯弹匣
-        b(0.035, 0.035, 0.3, dark, 0, 0.04, -0.46);    // 枪管
-        b(0.05, 0.04, 0.12, wood, 0, -0.015, -0.32);   // 护木
+        b(0.06, 0.085, 0.44, tMetal, 0, 0.02, -0.16);
+        stock(0.16);
+        mag(0.045, 0.13, 0.06, -0.075);
+        barrel(0.3, 0.035);
+        b(0.05, 0.04, 0.12, tWood, 0, -0.015, -0.32);
+        frontSight(); rearSight();
         break;
       case 'm4a1':
-        b(0.06, 0.085, 0.4, metal, 0, 0.02, -0.12);
-        b(0.05, 0.08, 0.14, dark, 0, 0.015, 0.15);
-        b(0.045, 0.12, 0.05, metal, 0, -0.07, -0.08);
-        b(0.04, 0.04, 0.34, dark, 0, 0.045, -0.42);    // 消音器
+        b(0.06, 0.085, 0.4, tMetal, 0, 0.02, -0.12);
+        stock(0.14);
+        mag(0.045, 0.12, 0.05, -0.07);
+        barrel(0.34, 0.04);
+        b(0.03, 0.03, 0.05, tPoly, 0, 0.1, -0.26);
+        frontSight();
         break;
       case 'awp':
-        b(0.06, 0.09, 0.48, metal, 0, 0.02, -0.2);
-        b(0.05, 0.08, 0.16, dark, 0, 0.01, 0.15);
-        b(0.035, 0.035, 0.42, dark, 0, 0.05, -0.52);   // 长枪管
-        b(0.04, 0.045, 0.18, dark, 0, 0.1, -0.28);     // 瞄准镜
+        b(0.06, 0.09, 0.48, tMetal, 0, 0.02, -0.2);
+        stock(0.16);
+        barrel(0.42, 0.035);
+        b(0.04, 0.045, 0.18, tPoly, 0, 0.1, -0.28);
+        mag(0.04, 0.1, 0.05, -0.07);
+        b(0.015, 0.04, 0.03, tMetal, 0, -0.02, 0.04);
         break;
       case 'mp5':
-        b(0.055, 0.08, 0.3, metal, 0, 0.02, -0.08);
-        b(0.05, 0.08, 0.12, dark, 0, 0.015, 0.1);
-        b(0.045, 0.13, 0.05, metal, 0, -0.08, -0.06);
-        b(0.032, 0.032, 0.2, dark, 0, 0.045, -0.3);
+        b(0.055, 0.08, 0.3, tMetal, 0, 0.02, -0.08);
+        stock(0.12);
+        mag(0.045, 0.13, 0.05, -0.08);
+        barrel(0.2, 0.032);
+        frontSight();
         break;
       case 'deagle':
-        b(0.05, 0.07, 0.28, metal, 0, 0.02, -0.08);
-        b(0.04, 0.12, 0.05, dark, 0, -0.06, 0.06);     // 握把
+        b(0.05, 0.07, 0.28, tMetal, 0, 0.02, -0.08);
+        b(0.04, 0.12, 0.05, tPoly, 0, -0.06, 0.06);
+        b(0.016, 0.03, 0.05, tDark, 0, 0.06, 0.02);
         break;
       case 'usp':
-        b(0.045, 0.06, 0.22, metal, 0, 0.02, -0.05);
-        b(0.035, 0.1, 0.045, dark, 0, -0.05, 0.05);
+        b(0.045, 0.06, 0.22, tMetal, 0, 0.02, -0.05);
+        b(0.035, 0.1, 0.045, tPoly, 0, -0.05, 0.05);
         break;
       case 'glock':
-        b(0.05, 0.06, 0.2, dark, 0, 0.02, -0.04);
-        b(0.04, 0.1, 0.045, metal, 0, -0.05, 0.05);
+        b(0.05, 0.06, 0.2, tPoly, 0, 0.02, -0.04);
+        b(0.04, 0.1, 0.045, tMetal, 0, -0.05, 0.05);
+        break;
+      case 'p228': case 'fiveseven':
+        b(0.05, 0.07, 0.28, tMetal, 0, 0.02, -0.08);
+        b(0.04, 0.12, 0.05, tPoly, 0, -0.06, 0.06);
+        break;
+      case 'elites':
+        b(0.045, 0.06, 0.24, tMetal, 0.05, 0.02, -0.06);
+        b(0.045, 0.06, 0.24, tMetal, -0.05, 0.02, -0.06);
+        break;
+      case 'tmp':
+        b(0.055, 0.075, 0.26, tMetal, 0, 0.02, -0.07);
+        mag(0.04, 0.11, 0.045, -0.07);
+        barrel(0.24, 0.04);
+        break;
+      case 'mac10':
+        b(0.055, 0.08, 0.24, tPoly, 0, 0.02, -0.06);
+        mag(0.045, 0.12, 0.05, -0.08);
+        barrel(0.16, 0.032);
+        break;
+      case 'ump45':
+        b(0.055, 0.08, 0.3, tMetal, 0, 0.02, -0.09);
+        stock(0.12);
+        mag(0.045, 0.13, 0.05, -0.08);
+        barrel(0.18, 0.035);
+        break;
+      case 'p90':
+        b(0.055, 0.08, 0.34, tMetal, 0, 0.02, -0.11);
+        b(0.045, 0.06, 0.2, tPoly, 0, 0.08, -0.06);
+        barrel(0.16, 0.03);
+        break;
+      case 'galil':
+        b(0.06, 0.085, 0.5, tMetal, 0, 0.02, -0.18);
+        stock(0.16);
+        mag(0.045, 0.13, 0.06, -0.075);
+        barrel(0.34, 0.035);
+        b(0.05, 0.04, 0.14, tWood, 0, -0.015, -0.36);
+        frontSight();
+        break;
+      case 'famas':
+        b(0.055, 0.08, 0.36, tMetal, 0, 0.02, -0.12);
+        stock(0.12);
+        mag(0.045, 0.12, 0.05, -0.07);
+        barrel(0.22, 0.032);
+        b(0.03, 0.04, 0.12, tPoly, 0, 0.095, -0.08);
+        break;
+      case 'sg552':
+        b(0.055, 0.08, 0.34, tMetal, 0, 0.02, -0.11);
+        stock(0.12);
+        mag(0.045, 0.12, 0.05, -0.07);
+        barrel(0.22, 0.033);
+        b(0.02, 0.04, 0.07, tPoly, 0, 0.09, -0.03);
+        break;
+      case 'aug':
+        b(0.055, 0.08, 0.36, tMetal, 0, 0.02, -0.12);
+        stock(0.12);
+        mag(0.045, 0.12, 0.05, -0.07);
+        barrel(0.22, 0.033);
+        b(0.04, 0.045, 0.18, tPoly, 0, 0.1, -0.08);
+        break;
+      case 'scout':
+        b(0.05, 0.075, 0.42, tMetal, 0, 0.02, -0.16);
+        stock(0.14);
+        barrel(0.32, 0.03);
+        b(0.035, 0.04, 0.15, tPoly, 0, 0.095, -0.22);
+        break;
+      case 'g3sg1': case 'sg550':
+        b(0.055, 0.085, 0.5, tMetal, 0, 0.02, -0.2);
+        stock(0.15);
+        mag(0.04, 0.12, 0.05, -0.07);
+        barrel(0.38, 0.035);
+        b(0.04, 0.045, 0.16, tPoly, 0, 0.1, -0.26);
+        break;
+      case 'm249':
+        b(0.07, 0.1, 0.5, tMetal, 0, 0.02, -0.2);
+        stock(0.14);
+        b(0.08, 0.11, 0.1, tPoly, 0, -0.08, -0.05);
+        barrel(0.4, 0.04);
+        b(0.012, 0.03, 0.05, tPoly, 0, 0.11, -0.3);
         break;
       case 'knife': {
-        b(0.03, 0.05, 0.1, wood, 0, 0.02, 0.02);
-        b(0.02, 0.08, 0.22, metal, 0, 0.06, -0.1);     // 刃
+        b(0.03, 0.05, 0.1, tWood, 0, 0.02, 0.02);
+        b(0.02, 0.08, 0.22, tMetal, 0, 0.06, -0.1);
         break;
       }
       case 'hegrenade': {
-        const s = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), metal);
-        s.position.set(0, 0.02, -0.05);
-        s.castShadow = true;
-        g.add(s);
+        const sp = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), tMetal);
+        sp.position.set(0, 0.02, -0.05);
+        sp.castShadow = true;
+        g.add(sp);
         break;
       }
-      // ---- 新增武器（第三人称，简化但可辨认） ----
-      case 'p228': case 'fiveseven':
-        b(0.05, 0.07, 0.28, metal, 0, 0.02, -0.08);
-        b(0.04, 0.12, 0.05, dark, 0, -0.06, 0.06);
-        break;
-      case 'elites':
-        b(0.045, 0.06, 0.24, metal, 0.05, 0.02, -0.06);
-        b(0.045, 0.06, 0.24, metal, -0.05, 0.02, -0.06);
-        break;
-      case 'tmp':
-        b(0.055, 0.075, 0.26, metal, 0, 0.02, -0.07);
-        b(0.04, 0.04, 0.24, dark, 0, 0.045, -0.28);  // 消音器
-        break;
-      case 'mac10':
-        b(0.055, 0.08, 0.24, dark, 0, 0.02, -0.06);
-        b(0.045, 0.12, 0.05, metal, 0, -0.08, -0.03);
-        break;
-      case 'ump45':
-        b(0.055, 0.08, 0.3, metal, 0, 0.02, -0.09);
-        b(0.045, 0.13, 0.05, metal, 0, -0.08, -0.05);
-        break;
-      case 'p90':
-        b(0.055, 0.08, 0.34, metal, 0, 0.02, -0.11);
-        b(0.045, 0.06, 0.2, dark, 0, 0.08, -0.06);  // 顶置弹匣
-        break;
-      case 'galil':
-        b(0.06, 0.085, 0.5, metal, 0, 0.02, -0.18);
-        b(0.05, 0.08, 0.16, wood, 0, 0.01, 0.13);
-        b(0.045, 0.12, 0.06, metal, 0, -0.075, -0.12);
-        break;
-      case 'famas':
-        b(0.055, 0.08, 0.36, metal, 0, 0.02, -0.12);
-        b(0.03, 0.04, 0.12, dark, 0, 0.095, -0.08);
-        break;
-      case 'sg552':
-        b(0.055, 0.08, 0.34, metal, 0, 0.02, -0.11);
-        b(0.02, 0.04, 0.07, dark, 0, 0.09, -0.03);
-        break;
-      case 'aug':
-        b(0.055, 0.08, 0.36, metal, 0, 0.02, -0.12);
-        b(0.04, 0.045, 0.18, dark, 0, 0.1, -0.08);  // 瞄准镜
-        break;
-      case 'scout':
-        b(0.05, 0.075, 0.42, metal, 0, 0.02, -0.16);
-        b(0.035, 0.035, 0.32, dark, 0, 0.05, -0.5);
-        b(0.035, 0.04, 0.15, dark, 0, 0.095, -0.22);
-        break;
-      case 'g3sg1': case 'sg550':
-        b(0.055, 0.085, 0.5, metal, 0, 0.02, -0.2);
-        b(0.035, 0.035, 0.38, dark, 0, 0.05, -0.56);
-        b(0.04, 0.045, 0.16, dark, 0, 0.1, -0.26);
-        break;
-      case 'm249':
-        b(0.07, 0.1, 0.5, metal, 0, 0.02, -0.2);
-        b(0.08, 0.11, 0.1, dark, 0, -0.08, -0.05);
-        b(0.04, 0.04, 0.4, dark, 0, 0.05, -0.58);
-        break;
       case 'flashbang': {
-        const s = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), new THREE.MeshLambertMaterial({ color: 0xb8c4cc }));
-        s.position.set(0, 0.02, -0.05);
-        s.castShadow = true;
-        g.add(s);
+        const sp = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), tMetal);
+        sp.position.set(0, 0.02, -0.05);
+        sp.castShadow = true;
+        g.add(sp);
         break;
       }
       case 'smokegrenade':
-        b(0.08, 0.16, 0.08, new THREE.MeshLambertMaterial({ color: 0x3f5238 }), 0, 0.02, -0.05);
+        b(0.08, 0.16, 0.08, tPoly, 0, 0.02, -0.05);
         break;
-      default: { // bomb
-        b(0.1, 0.07, 0.15, dark, 0, 0.02, -0.04);
-        b(0.08, 0.05, 0.11, metal, 0, 0.005, -0.04);
+      default: {
+        b(0.1, 0.07, 0.15, tPoly, 0, 0.02, -0.04);
+        b(0.08, 0.05, 0.11, tMetal, 0, 0.005, -0.04);
         break;
       }
     }
@@ -729,22 +828,56 @@ const Render = (function () {
     const g = new THREE.Group();
     const skin = new THREE.MeshLambertMaterial({ color: 0xd9a87c });
     const teamCol = team === GAMECONST.TEAM_T ? 0xc87f3a : 0x4f78a4;
-    const cloth = new THREE.MeshLambertMaterial({ color: teamCol });
-    const dark = new THREE.MeshLambertMaterial({ color: team === GAMECONST.TEAM_T ? 0x8a5a28 : 0x35506e });
+    const vestCol = team === GAMECONST.TEAM_T ? 0x8a5424 : 0x2f4a68;
+    const pantsCol = team === GAMECONST.TEAM_T ? 0x4a4436 : 0x33445c;
+    const cloth = new THREE.MeshLambertMaterial({ map: clothTexture(team === GAMECONST.TEAM_T ? '#c87f3a' : '#4f78a4') });
+    const vest = new THREE.MeshLambertMaterial({ map: vestTexture(team === GAMECONST.TEAM_T ? '#8a5424' : '#2f4a68') });
+    const pants = new THREE.MeshLambertMaterial({ map: clothTexture(team === GAMECONST.TEAM_T ? '#4a4436' : '#33445c') });
+    const helmet = new THREE.MeshLambertMaterial({ color: vestCol });
+    const boots = new THREE.MeshLambertMaterial({ color: 0x26221e });
 
-    const legL = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.72, 0.16), dark);
-    legL.position.set(-0.1, 0.36, 0);
+    // 靴子
+    const bootL = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.12, 0.24), boots);
+    bootL.position.set(-0.1, 0.06, 0.02);
+    const bootR = bootL.clone(); bootR.position.x = 0.1;
+    // 腿
+    const legL = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.6, 0.17), pants);
+    legL.position.set(-0.1, 0.42, 0);
     const legR = legL.clone(); legR.position.x = 0.1;
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.66, 0.26), cloth);
-    torso.position.set(0, 1.02, 0);
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.24, 0.22), skin);
-    head.position.set(0, 1.55, 0);
-    const armL = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.5, 0.12), cloth);
-    armL.position.set(-0.3, 1.05, 0.1);
-    const armR = armL.clone(); armR.position.x = 0.3;
+    // 腰带
+    const belt = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.09, 0.27), boots);
+    belt.position.set(0, 0.8, 0);
+    // 躯干
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.56, 0.25), cloth);
+    torso.position.set(0, 1.12, 0);
+    // 战术背心
+    const vestMesh = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.36, 0.31), vest);
+    vestMesh.position.set(0, 1.16, 0);
+    // 肩甲
+    const shoulderL = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.1, 0.17), vest);
+    shoulderL.position.set(-0.29, 1.38, 0);
+    const shoulderR = shoulderL.clone(); shoulderR.position.x = 0.29;
+    // 手臂（绕肩摆动）
+    const armGeo = new THREE.BoxGeometry(0.11, 0.46, 0.13);
+    armGeo.translate(0, -0.2, 0);
+    const armL = new THREE.Mesh(armGeo, cloth);
+    armL.position.set(-0.29, 1.4, 0.06);
+    const armR = new THREE.Mesh(armGeo, cloth);
+    armR.position.set(0.29, 1.4, 0.06);
+    // 头
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), skin);
+    head.position.set(0, 1.56, 0);
+    // 头盔
+    const helm = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.1, 0.24), helmet);
+    helm.position.set(0, 1.67, 0);
+    const brim = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.025, 0.07), helmet);
+    brim.position.set(0, 1.645, 0.1);
 
-    g.add(legL, legR, torso, head, armL, armR);
-    g.userData = { legL, legR, armL, armR, walkPhase: 0, dead: 0 };
+    g.add(bootL, bootR, legL, legR, belt, torso, vestMesh, shoulderL, shoulderR, armL, armR, head, helm, brim);
+    g.userData = {
+      legL, legR, armL, armR, torso, head, helm, brim, vestMesh, belt,
+      walkPhase: 0, dead: 0
+    };
     g.castShadow = true;
     g.traverse(o => { if (o.isMesh) { o.castShadow = true; } });
     return g;
@@ -794,11 +927,24 @@ const Render = (function () {
         m.vel.x += (p.vx - m.vel.x) * 0.3; m.vel.z += (p.vz - m.vel.z) * 0.3;
         g.userData.walkPhase += (0.5 + sp * 1.6) * 0.16;
         const ph = g.userData.walkPhase;
-        const swing = Math.sin(ph) * Math.min(0.7, sp * 0.25);
+        const swing = Math.sin(ph) * Math.min(0.8, sp * 0.28);
         g.userData.legL.rotation.x = swing;
         g.userData.legR.rotation.x = -swing;
-        g.userData.armL.rotation.x = -swing * 0.4;
-        g.userData.armR.rotation.x = swing * 0.4;
+        g.userData.armL.rotation.x = -swing * 0.55;
+        g.userData.armR.rotation.x = swing * 0.55;
+        // 奔跑前倾 + 蹲姿压腿
+        const lean = Math.min(0.14, sp * 0.028);
+        g.userData.torso.rotation.x = -lean;
+        g.userData.vestMesh.rotation.x = -lean;
+        g.userData.legL.scale.y = p.crouch ? 0.55 : 1;
+        g.userData.legR.scale.y = p.crouch ? 0.55 : 1;
+        g.userData.torso.position.y = p.crouch ? 0.98 : 1.12;
+        g.userData.vestMesh.position.y = p.crouch ? 1.02 : 1.16;
+        g.userData.head.position.y = p.crouch ? 1.36 : 1.56;
+        g.userData.helm.position.y = p.crouch ? 1.47 : 1.67;
+        g.userData.brim.position.y = p.crouch ? 1.445 : 1.645;
+        g.userData.armL.position.y = p.crouch ? 1.2 : 1.4;
+        g.userData.armR.position.y = p.crouch ? 1.2 : 1.4;
         // 跑动尘土
         m.dustT = (m.dustT || 0) - 1;
         if (sp > 3.3 && m.dustT <= 0) {
