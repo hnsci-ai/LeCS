@@ -706,12 +706,15 @@ const Main = (function () {
       HUD.updateLootPrompt(prompt);
     }
     if (S.sim) {
-      HUD.updateRadar(
-        { x: S.sim.x, z: S.sim.z }, S.sim.yaw,
-        Array.from(players.values()).filter(p => p.id !== S.myId),
-        snap ? snap.bomb : null,
-        snap ? snap.hostages : null
-      );
+      S.radarTick = (S.radarTick || 0) + 1;
+      if (S.radarTick % 5 === 0) { // 12Hz 重绘，减少每帧 2D 开销
+        HUD.updateRadar(
+          { x: S.sim.x, z: S.sim.z }, S.sim.yaw,
+          Array.from(players.values()).filter(p => p.id !== S.myId),
+          snap ? snap.bomb : null,
+          snap ? snap.hostages : null
+        );
+      }
     }
 
     requestAnimationFrame(frame);

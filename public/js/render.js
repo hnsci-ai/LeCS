@@ -200,7 +200,7 @@ const Render = (function () {
   // ---------- 初始化 ----------
   function init(canvas) {
     renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); // 高 DPI 屏限制填充率，减少卡顿
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -962,7 +962,7 @@ const Render = (function () {
         // 跑动尘土        // 跑动尘土
         m.dustT = (m.dustT || 0) - 1;
         if (sp > 3.3 && m.dustT <= 0) {
-          m.dustT = 0.16;
+          m.dustT = 0.34;
           spawnBurst(p.x, p.y + 0.12, p.z, { count: 4, color: 0xc9b489, size: 0.05, speed: 0.8, life: 0.45, gravity: 0.7, upBias: 1.1 });
         }
       } else {
@@ -1028,41 +1028,40 @@ const Render = (function () {
   }
 
   // ---------- 特效：粒子爆发 ----------
+  const burstFree = []; // 粒子对象池（复用几何体/材质，消除 GC 卡顿）
+  const BURST_MAX = 24;
   function spawnBurst(x, y, z, opts) {
-    const count = opts.count || 10;
-    const pos = new Float32Array(count * 3);
-    const vels = [];
+    const count = Math.min(opts.count || 10, BURST_MAX);
+    let b = burstFree.pop();
+    if (!b) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(BURST_MAX * 3), 3));
+      const mat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.05, transparent: true, depthWrite: false });
+      const points = new THREE.Points(geo, mat);
+      scene.add(points);
+      b = { points, vels: new Float32Array(BURST_MAX * 3) };
+    }
+    const attr = b.points.geometry.getAttribute('position');
+    const arr = attr.array;
     for (let i = 0; i < count; i++) {
       const th = Math.random() * Math.PI * 2;
       const ph = Math.acos(2 * Math.random() - 1);
       const sp = (opts.speed || 3) * (0.35 + Math.random() * 0.85);
-      vels.push(
-        Math.sin(ph) * Math.cos(th) * sp,
-        Math.cos(ph) * sp * (opts.upBias === undefined ? 0.9 : opts.upBias) + (opts.upSpeed || 0),
-        Math.sin(ph) * Math.sin(th) * sp
-      );
-      pos[i * 3] = x; pos[i * 3 + 1] = y; pos[i * 3 + 2] = z;
+      b.vels[i * 3] = Math.sin(ph) * Math.cos(th) * sp;
+      b.vels[i * 3 + 1] = Math.cos(ph) * sp * (opts.upBias === undefined ? 0.9 : opts.upBias) + (opts.upSpeed || 0);
+      b.vels[i * 3 + 2] = Math.sin(ph) * Math.sin(th) * sp;
+      arr[i * 3] = x; arr[i * 3 + 1] = y; arr[i * 3 + 2] = z;
     }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    const mat = new THREE.PointsMaterial({
-      color: opts.color || 0xffc860, size: opts.size || 0.05,
-      transparent: true, opacity: 1, depthWrite: false
-    });
-    const points = new THREE.Points(geo, mat);
-    scene.add(points);
-    burstPool.push({
-      points, vels,
-      life: opts.life || 0.4, maxLife: opts.life || 0.4,
-      gravity: opts.gravity === undefined ? 9.8 : opts.gravity,
-      drag: opts.drag === undefined ? 0.92 : opts.drag
-    });
-    if (burstPool.length > 28) {
-      const old = burstPool.shift();
-      scene.remove(old.points);
-      old.points.geometry.dispose();
-      old.points.material.dispose();
-    }
+    attr.needsUpdate = true;
+    b.points.geometry.setDrawRange(0, count);
+    b.points.material.color.set(opts.color || 0xffc860);
+    b.points.material.size = opts.size || 0.05;
+    b.points.material.opacity = 1;
+    b.points.visible = true;
+    b.life = opts.life || 0.4; b.maxLife = opts.life || 0.4;
+    b.gravity = opts.gravity === undefined ? 9.8 : opts.gravity;
+    b.drag = opts.drag === undefined ? 0.92 : opts.drag;
+    burstPool.push(b);
   }
 
   // ---------- 特效：其他玩家枪口火光 ----------
@@ -1159,9 +1158,14 @@ const Render = (function () {
       const b = burstPool[i];
       b.life -= dt;
       if (b.life <= 0) {
-        scene.remove(b.points);
-        b.points.geometry.dispose();
-        b.points.material.dispose();
+        b.points.visible = false;
+        b.points.geometry.setDrawRange(0, 0);
+        burstFree.push(b);
+        if (burstFree.length > 48) { // 池上限，超出销毁
+          const ex = burstFree.shift();
+          ex.points.geometry.dispose();
+          ex.points.material.dispose();
+        }
         burstPool.splice(i, 1);
         continue;
       }

@@ -19,11 +19,16 @@ const Audio = (function () {
   }
   function resume() { ensure(); if (ctx && ctx.state === 'suspended') ctx.resume(); }
 
+  let sharedNoise = null;
   function noiseBuffer(len) {
-    const b = ctx.createBuffer(1, len, ctx.sampleRate);
-    const d = b.getChannelData(0);
-    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-    return b;
+    // 共享噪声缓冲：避免每枪分配新 AudioBuffer（消除 GC 卡顿）
+    const want = Math.max(len, Math.floor(ctx.sampleRate * 2.5));
+    if (!sharedNoise || sharedNoise.length < want) {
+      sharedNoise = ctx.createBuffer(1, want, ctx.sampleRate);
+      const d = sharedNoise.getChannelData(0);
+      for (let i = 0; i < want; i++) d[i] = Math.random() * 2 - 1;
+    }
+    return sharedNoise;
   }
 
   // 通用噪声爆发
