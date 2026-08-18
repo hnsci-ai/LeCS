@@ -1134,7 +1134,7 @@ class Game {
   // 烟雾是否阻挡两点间视线（Bot 感知用；子弹照常穿过）
   smokeBlocks(x1, y1, z1, x2, y2, z2) {
     for (const s of this.smokes) {
-      if (segCircleDist(x1, z1, x2, z2, s.x, s.z) < s.r && Math.min(y1, y2) < 3.4) return true;
+      if (segCircleDist(x1, z1, x2, z2, s.x, s.z) < s.r && Math.min(y1, y2) < s.y + s.r * 0.9) return true;
     }
     return false;
   }

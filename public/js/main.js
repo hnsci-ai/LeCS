@@ -818,6 +818,17 @@ const Main = (function () {
       armsLadder: snap ? snap.armsLadder : null
     });
     if (HUD.buyOpen()) HUD.refreshBuyMenu(dispMe, canBuy());
+    // 烟雾视界：站在烟团内时屏幕蒙灰雾（看不清外面）
+    {
+      let inSmoke = false;
+      if (S.sim && snap && snap.smokes) {
+        for (const sm of snap.smokes) {
+          if (Math.hypot(sm[0] - S.sim.x, sm[2] - S.sim.z) < sm[3] * 0.92) { inSmoke = true; break; }
+        }
+      }
+      const so = document.getElementById('smoke-overlay');
+      if (so) so.classList.toggle('hidden', !inSmoke);
+    }
     // 舔包提示：附近 2.5 米内有战利品箱时显示（对话框打开时不显示）
     if (!HUD.lootOpen()) {
       let prompt = null;

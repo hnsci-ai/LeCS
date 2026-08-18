@@ -444,6 +444,7 @@ const Render = (function () {
 
   // ---------- 烟雾弹烟团 ----------
   const smokePool = [];
+  const smokeSpherePool = []; // 实心烟球：真正遮挡玩家视线（外面看不到里面 / 里面是灰墙）
   let smokeTex = null;
   function initSmoke() {
     const c = makeCanvas(64, 64, (g, w, h) => {
@@ -464,6 +465,17 @@ const Render = (function () {
       scene.add(sp);
       smokePool.push(sp);
     }
+    // 实心烟球：BackSide + depthWrite=false → 外面看是不透明烟墙，站在里面看到的是环绕灰墙
+    for (let i = 0; i < 8; i++) {
+      const mat = new THREE.MeshLambertMaterial({
+        map: smokeTex, color: 0x9aa2a8, transparent: true, opacity: 0, depthWrite: false, side: THREE.BackSide
+      });
+      const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), mat);
+      mesh.visible = false;
+      mesh.frustumCulled = false; // 相机在球内也必须渲染
+      scene.add(mesh);
+      smokeSpherePool.push(mesh);
+    }
   }
 
   function updateSmokes(list) {
@@ -471,6 +483,15 @@ const Render = (function () {
     let idx = 0;
     list.forEach((s, si) => {
       const x = s[0], y = s[1], z = s[2], r = s[3];
+      const lifeFrac = s[4] === undefined ? 1 : Math.max(0.15, s[4]);
+      // 实心烟球（真正遮挡视线）
+      if (si < smokeSpherePool.length) {
+        const sph = smokeSpherePool[si];
+        sph.visible = true;
+        sph.position.set(x, y + 0.6, z);
+        sph.scale.setScalar(Math.max(0.6, r * 0.98));
+        sph.material.opacity = 0.92 * (0.45 + 0.55 * lifeFrac);
+      }
       for (let k = 0; k < 6 && idx < smokePool.length; k++) {
         const sp = smokePool[idx++];
         sp.visible = true;
@@ -483,11 +504,11 @@ const Render = (function () {
         );
         const sc = 1.0 + r * 0.55 + ((si + k) % 5) * 0.14;
         sp.scale.set(sc, sc, 1);
-        const lifeFrac = s[4] === undefined ? 1 : Math.max(0.15, s[4]); // 快照带剩余生命 → 临近消散渐隐
-        sp.material.opacity = (0.26 + ((si + k * 2) % 3) * 0.07) * (0.35 + 0.65 * lifeFrac);
+        sp.material.opacity = (0.26 + ((si + k * 2) % 3) * 0.07) * (0.35 + 0.65 * lifeFrac); // 快照带剩余生命 → 临近消散渐隐
       }
     });
     for (; idx < smokePool.length; idx++) smokePool[idx].visible = false;
+    for (let i = list.length; i < smokeSpherePool.length; i++) smokeSpherePool[i].visible = false;
   }
 
   function buildPools() {
@@ -1203,6 +1224,7 @@ const Render = (function () {
     _debugDrawCalls: () => renderer.info.render.calls,
     _debugTriangles: () => renderer.info.render.triangles,
     _debugShadowOn: () => renderer.shadowMap.enabled,
+    _debugSmokeSpheres: () => smokeSpherePool.filter(m => m.visible).length,
     _debugArmor: () => {
       const out = {};
       for (const [id, m] of playerMeshes) {
