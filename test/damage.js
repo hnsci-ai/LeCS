@@ -187,6 +187,24 @@ async function setup(gun) {
     check(alive3 === 0, '轻击补刀击杀 ✓');
   }
 
+  // 9. 匕首无视护甲（CS 1.6 规则：刀伤不吃护甲减伤，穿甲也恒定 25/50）
+  {
+    const { a, b } = await setup('knife');
+    a.dev('tp', { x: -6, z: -2 });
+    b.dev('tp', { x: -4.6, z: -2 });
+    b.dev('armor', { armor: 100, helmet: true });
+    b.dev('hp', { hp: 100 });
+    await sleep(300);
+    a.send({ t: 'input', seq: ++a.seq, keys: { fireAlt: true }, yaw: Math.atan2(-4, 0), pitch: 0, tClient: Date.now() });
+    await sleep(100);
+    a.send({ t: 'input', seq: ++a.seq, keys: {}, yaw: Math.atan2(-4, 0), pitch: 0, tClient: Date.now() });
+    await sleep(500);
+    const hp = b.me()[6], armorLeft = b.me()[7];
+    console.log(`  重击(穿防弹衣): hp=${hp} 护甲=${armorLeft}`);
+    check(hp === 50, '重击无视护甲 = 50 伤害（穿防弹衣也是半血）');
+    check(armorLeft === 100, '刀伤不消耗护甲耐久');
+  }
+
   console.log(failures === 0 ? '\n=== 伤害数值测试通过 ✓ ===' : `\n=== ${failures} 项失败 ✗ ===`);
   process.exit(failures === 0 ? 0 : 1);
 })().catch(e => { console.error('测试异常:', e.message); process.exit(1); });
