@@ -78,7 +78,8 @@ wss.on('connection', (ws) => {
     if (msg.t === 'join') {
       if (player) return;
       const name = String(msg.name || '玩家').slice(0, 16);
-      const mode = msg.mode === 'dm' ? 'dm' : 'classic';
+      const MODES = { classic: 'classic', dm: 'dm', hostage: 'hostage', armsrace: 'armsrace' };
+      const mode = MODES[msg.mode] || 'classic';
       let room = msg.code ? rooms.get(String(msg.code).toUpperCase()) : null;
       if (room && room.mode !== mode) {
         ws.send(JSON.stringify({ t: 'error', text: '该房间模式不匹配（' + room.mode + '）' }));

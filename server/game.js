@@ -11,6 +11,10 @@ let NEXT_ID = 1;
 
 function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
 
+// 军备竞赛（枪王）武器阶梯：从匕首一路杀到最终刀战
+const ARMS_LADDER = ['knife', 'glock', 'usp', 'deagle', 'mp5', 'ak47', 'm4a1', 'awp', 'hegrenade', 'knife'];
+const STREAK_MSGS = { 3: '3 连杀', 5: '5 连杀 · 势不可挡', 7: '7 连杀 · 无人能挡' };
+
 function angDiffWrap(a, b) {
   let d = (a - b) % (Math.PI * 2);
   if (d > Math.PI) d -= Math.PI * 2;
@@ -41,6 +45,8 @@ class Game {
     this.bomb = { state: C.BOMB_HIDDEN, carrier: null, x: 0, y: 0, z: 0, site: null, timeLeft: C.BOMB_TIME };
     this.nades = [];
     this.smokes = [];    // 烟雾弹烟团 [{x,y,z,r,born,life,growUntil}]
+    this.hostages = [];  // 人质营救模式 [{id,x,y,z,yaw,state:'idle'|'follow',leader}]
+    this.rescued = 0;
     this.shots = [];      // 本 tick 的枪声事件
     this.killfeed = [];   // 最近 6 条
     this.events = [];     // 待广播事件（每 tick 清空）
@@ -78,6 +84,8 @@ class Game {
       weapons: {}, curSlot: 1,
       grenades: [], // 手雷背包（hegrenade/flashbang/smokegrenade，每种最多一颗）
       blindUntil: 0,
+      armsLevel: 0, // 军备竞赛当前阶梯等级
+      streak: 0,    // 连杀数
       nextFire: 0, reloadEnd: 0, reloading: false,
       in: { f: false, b: false, l: false, r: false, walk: false, crouch: false, jump: false, use: false, fire: false, fireAlt: false, reload: false, slot: 0 },
       firePressed: false, fireAltPressed: false, fireWasDown: false,
@@ -89,9 +97,10 @@ class Game {
       diedAt: 0, spectateTarget: null
     };
     this.players.set(id, p);
-    this.giveDefault(p); // 基础装备（DM 稍后覆盖为全装）
-    if (this.mode === 'dm') {
-      this.giveDMLoadout(p);
+    this.giveDefault(p); // 基础装备（DM/军备竞赛稍后覆盖）
+    if (this.mode === 'dm' || this.mode === 'armsrace') {
+      if (this.mode === 'dm') this.giveDMLoadout(p);
+      else this.giveArmsLoadout(p);
       this.spawnPlayer(p);
       this.broadcastRoster();
       return p;
@@ -240,11 +249,20 @@ class Game {
   // ---------- 回合 ----------
   startRound() {
     this.round++;
-    this.phase = this.mode === 'dm' ? C.STATE_LIVE : C.STATE_FREEZE;
-    this.timeLeft = this.mode === 'dm' ? 86400 : C.FREEZE_TIME;
+    const instantLive = this.mode === 'dm' || this.mode === 'armsrace';
+    this.phase = instantLive ? C.STATE_LIVE : C.STATE_FREEZE;
+    this.timeLeft = instantLive ? 86400 : C.FREEZE_TIME;
     this.bomb = { state: C.BOMB_HIDDEN, carrier: null, x: 0, y: 0, z: 0, site: null, timeLeft: C.BOMB_TIME };
     this.nades = [];
     this.smokes = [];
+    // 人质营救：刷新 4 名人质
+    this.hostages = [];
+    this.rescued = 0;
+    if (this.mode === 'hostage') {
+      (MAP.hostageSpots || []).forEach((sp, i) => {
+        this.hostages.push({ id: 9000 + i, x: sp.x, y: 0, z: sp.z, yaw: 0, state: 'idle', leader: null });
+      });
+    }
     const aliveTs = [];
     this.players.forEach(p => {
       p.history = [];
@@ -340,6 +358,87 @@ class Game {
 
   addMoney(p, amt) { p.money = clamp(p.money + amt, 0, C.MAX_MONEY); }
 
+  // 军备竞赛：按当前等级发放武器
+  giveArmsLoadout(p) {
+    const wid = ARMS_LADDER[clamp(p.armsLevel || 0, 0, ARMS_LADDER.length - 1)];
+    const def = W[wid];
+    if (!def) return;
+    p.weapons = { 3: { id: 'knife', mag: 1, reserve: 0 } };
+    if (def.slot === 1) p.weapons[1] = { id: wid, mag: def.mag, reserve: def.reserve };
+    if (def.slot === 2) p.weapons[2] = { id: wid, mag: def.mag, reserve: def.reserve };
+    if (def.slot === 3 && wid !== 'knife') {
+      if (!p.grenades) p.grenades = [];
+      if (!p.grenades.includes(wid)) p.grenades.push(wid);
+      p.weapons[4] = { id: wid, mag: 1, reserve: 0 };
+    }
+    p.curSlot = def.slot === 1 ? 1 : (def.slot === 2 ? 2 : (def.slot === 3 && wid !== 'knife' ? 4 : 3));
+    p.armor = C.MAX_ARMOR; p.helmet = true;
+    p.money = 16000;
+  }
+
+  // 人质状态更新与营救判定
+  tickHostages(dt) {
+    if (this.mode !== 'hostage') return;
+    const bz = MAP.buyZones.ct; // 营救区 = CT 出生区
+    for (const h of this.hostages) {
+      if (h.state !== 'follow' || !h.leader) continue;
+      const L = h.leader;
+      if (!L.alive) {
+        h.state = 'idle'; h.leader = null;
+        this.emitEvent({ type: 'hostage', event: 'drop', id: h.id, x: +h.x.toFixed(1), z: +h.z.toFixed(1) });
+        continue;
+      }
+      // 寻路跟随：沿 A* 路径追领导者（会绕墙），每 1.5 秒重算
+      h.repathT = (h.repathT || 0) - dt;
+      const dLead = Math.hypot(L.x - h.x, L.z - h.z);
+      if (dLead > 3) {
+        if (!h.path || h.repathT <= 0) {
+          h.repathT = 1.5;
+          h.path = MAP.findPathSmooth(h.x, h.z, L.x, L.z);
+          h.pathIdx = 0;
+        }
+        if (h.path && h.pathIdx < h.path.length) {
+          const wp = h.path[h.pathIdx];
+          const dx = wp.x - h.x, dz = wp.z - h.z;
+          const d = Math.hypot(dx, dz);
+          if (d < 0.7) { h.pathIdx++; }
+          else {
+            const sp = Math.min(d, 4.2 * dt);
+            h.x += dx / d * sp;
+            h.z += dz / d * sp;
+            h.yaw = Math.atan2(-dx, -dz);
+          }
+        }
+      } else {
+        h.yaw = L.yaw;
+      }
+      // 到达营救区 → 获救
+      if (h.x >= bz.x1 && h.x <= bz.x2 && h.z >= bz.z1 && h.z <= bz.z2) {
+        this.rescued++;
+        this.addMoney(L, 1000);
+        this.emitEvent({ type: 'hostage', event: 'rescue', id: h.id, name: L.name, rescued: this.rescued });
+        const idx = this.hostages.indexOf(h);
+        if (idx >= 0) this.hostages.splice(idx, 1);
+        if (this.hostages.length === 0) this.endRound('ct', '人质全部获救');
+      }
+    }
+  }
+
+  // 人质交互：CT 按 E 带领人质
+  tryLeadHostage(p) {
+    if (this.mode !== 'hostage' || p.team !== C.TEAM_CT) return;
+    for (const h of this.hostages) {
+      if (h.state !== 'idle') continue;
+      const d = Math.hypot(h.x - p.x, h.z - p.z);
+      if (d < 2.0) {
+        h.state = 'follow';
+        h.leader = p;
+        this.emitEvent({ type: 'hostage', event: 'follow', id: h.id, name: p.name });
+        return;
+      }
+    }
+  }
+
   // ---------- 购买 ----------
   buy(p, id) {
     const res = this.validateBuy(p, id);
@@ -349,6 +448,7 @@ class Game {
   }
 
   validateBuy(p, id) {
+    if (this.mode === 'armsrace') return { ok: false, reason: '军备竞赛无需购买' };
     if (this.mode !== 'dm' && this.phase === C.STATE_END) return { ok: false, reason: '回合已结束' };
     if (this.mode === 'dm') return { ok: true };
     if (!p.alive) return { ok: false, reason: '已阵亡' };
@@ -451,8 +551,9 @@ class Game {
           p.in.jump = false;
           this.historyPush(p);
           this.checkPickup(p);
-        } else if (this.mode === 'dm' && !p.spectator && now >= p.respawnAt) {
+        } else if ((this.mode === 'dm' || this.mode === 'armsrace') && !p.spectator && now >= p.respawnAt) {
           this.spawnPlayer(p);
+          if (this.mode === 'armsrace') this.giveArmsLoadout(p);
         }
         // 观战
         if (!p.alive && p.spectator && !p.bot) {
@@ -465,8 +566,12 @@ class Game {
       this.tickBomb(dt);
       this.tickNades(dt);
       this.tickSmokes(dt);
+      this.tickHostages(dt);
       this.checkRoundEnd();
-      if (this.timeLeft <= 0) this.endRound('ct', '时间到');
+      if (this.timeLeft <= 0) {
+        // 经典/军备：CT 胜；人质营救：时间到 T 胜（人质未获救）
+        this.endRound(this.mode === 'hostage' ? 't' : 'ct', '时间到');
+      }
     } else if (this.phase === C.STATE_END) {
       this.timeLeft -= dt;
       this.players.forEach(p => {
@@ -498,6 +603,8 @@ class Game {
     this.players.forEach(p => {
       if (!p.alive) { this.clearEdges(p); return; }
       const inp = p.in;
+      // 人质营救：按 E 带领人质
+      if (inp.use && this.mode === 'hostage') this.tryLeadHostage(p);
       if (inp.slot) {
         const s = inp.slot;
         if (s === 4) {
@@ -747,10 +854,28 @@ class Game {
     if (this.killfeed.length > 6) this.killfeed.pop();
     this.emitEvent({ type: 'kill', killer: killer.id, victim: victim.id, weapon: wid, headshot: !!headshot, teamkill: teamKill });
 
-    if (this.mode === 'dm' && !victim.bot) {
-      victim.respawnAt = Date.now() + 2000;
-    } else if (this.mode === 'dm' && victim.bot) {
-      victim.respawnAt = Date.now() + 1500;
+    if (this.mode === 'dm' || this.mode === 'armsrace') {
+      victim.respawnAt = Date.now() + (victim.bot ? 1500 : 2000);
+    }
+    // 连杀播报
+    killer.streak = (killer.streak || 0) + 1;
+    victim.streak = 0;
+    if (STREAK_MSGS[killer.streak] && !teamKill) {
+      this.emitEvent({ type: 'streak', id: killer.id, name: killer.name, streak: killer.streak });
+    }
+    // 军备竞赛：击杀升级，匕首击杀降级对方，登顶夺冠
+    if (this.mode === 'armsrace' && !teamKill) {
+      killer.armsLevel = Math.min(ARMS_LADDER.length - 1, (killer.armsLevel || 0) + 1);
+      if (wid === 'knife' && victim.armsLevel > 0) {
+        victim.armsLevel = (victim.armsLevel || 0) - 1;
+        this.giveArmsLoadout(victim);
+      }
+      if (killer.armsLevel >= ARMS_LADDER.length - 1) {
+        this.emitEvent({ type: 'armswin', name: killer.name, id: killer.id });
+        this.players.forEach(q => { q.armsLevel = 0; q.alive = true; q.spectator = false; this.spawnPlayer(q); this.giveArmsLoadout(q); });
+      } else {
+        this.giveArmsLoadout(killer);
+      }
     }
   }
 
@@ -971,7 +1096,7 @@ class Game {
   }
 
   checkRoundEnd() {
-    if (this.mode !== 'classic') return;
+    if (this.mode !== 'classic' && this.mode !== 'hostage') return;
     let tAlive = 0, ctAlive = 0, tMembers = 0, ctMembers = 0;
     this.players.forEach(p => {
       if (p.team === C.TEAM_T) { tMembers++; if (p.alive) tAlive++; }
@@ -979,6 +1104,11 @@ class Game {
     });
     // 某一方完全没有玩家时不判负（等待加入/Bot）
     if (tMembers === 0 || ctMembers === 0) return;
+    if (this.mode === 'hostage') {
+      // 人质营救：CT 全灭 → T 胜（人质获救由 tickHostages 判定）
+      if (ctAlive === 0) this.endRound('t', 'CT 全灭');
+      return;
+    }
     if (this.bomb.state === C.BOMB_PLANTED) {
       if (ctAlive === 0) this.endRound('t', 'CT 全灭');
       return;
@@ -1032,7 +1162,8 @@ class Game {
         p.helmet ? 1 : 0, p.defuseKit ? 1 : 0,
         this.bomb.state === C.BOMB_CARRIED && this.bomb.carrier === p ? 1 : 0,
         +p.planting.toFixed(2), +p.defusing.toFixed(2),
-        p.ackSeq, +p.vx.toFixed(2), +p.vz.toFixed(2), p.spectator ? 1 : 0, p.scoped || 0
+        p.ackSeq, +p.vx.toFixed(2), +p.vz.toFixed(2), p.spectator ? 1 : 0, p.scoped || 0,
+        this.mode === 'armsrace' ? (p.armsLevel || 0) : 0
       ]);
     });
     return {
@@ -1044,6 +1175,8 @@ class Game {
         this.bomb.site || '', this.bomb.carrier ? this.bomb.carrier.id : 0],
       nades: this.nades.map(n => [+n.x.toFixed(2), +n.y.toFixed(2), +n.z.toFixed(2), n.type || 'hegrenade']),
       smokes: this.smokes.map(s => [+s.x.toFixed(1), +s.y.toFixed(1), +s.z.toFixed(1), +s.r.toFixed(1)]),
+      hostages: this.hostages.map(h => [h.id, +h.x.toFixed(1), 0, +h.z.toFixed(1), +h.yaw.toFixed(2), h.state === 'follow' ? 1 : 0, h.leader ? h.leader.id : 0]),
+      rescued: this.rescued,
       shots: this.shots,
       killfeed: this.killfeed
     };

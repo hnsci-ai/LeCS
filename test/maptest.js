@@ -91,6 +91,18 @@ for (const r of MAP.rooms) {
 const losTA = MAP.losClear(t0.x, 1.6, t0.z, MAP.sites.a.plant.x, 1.6, MAP.sites.a.plant.z, 0.2);
 console.log('  · T出生点与A点直线视线:', losTA ? '无遮挡（正常，dust2 T家可看到长道外?）' : '有遮挡');
 
+// 5.5 人质点物理间隙（人质只需站得住，要求距掩体 ≥0.8m）
+console.log('  掩体数量:', MAP.walls.length, '· 新增掩体:', MAP.covers ? MAP.covers.length : 0);
+for (const h of (MAP.hostageSpots || [])) {
+  let minD = 99;
+  for (const w of MAP.walls) {
+    const dx = Math.max(w.x1 - h.x, 0, h.x - w.x2);
+    const dz = Math.max(w.z1 - h.z, 0, h.z - w.z2);
+    minD = Math.min(minD, Math.sqrt(dx * dx + dz * dz));
+  }
+  check(minD >= 0.8, `人质点 (${h.x},${h.z}) 距掩体 ${minD.toFixed(1)}m ≥ 0.8m`);
+}
+
 // 6. 埋包点距离墙 ≥2.5m
 for (const key of ['a', 'b']) {
   const p = MAP.sites[key].plant;

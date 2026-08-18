@@ -121,10 +121,31 @@ class BotBrain {
     const g = this.game;
     const site = g.mode === 'classic' ? MAP.sites[this.siteChoice] : MAP.sites[Math.random() < 0.5 ? 'a' : 'b'];
 
-    if (g.mode === 'dm') {
+    if (g.mode === 'dm' || g.mode === 'armsrace') {
       if (this.lastEnemySpot && Date.now() - this.lastEnemySpot.t < 6000) return { x: this.lastEnemySpot.x, z: this.lastEnemySpot.z };
       const s = MAP.sites[Math.random() < 0.5 ? 'a' : 'b'];
       return { x: s.plant.x + (Math.random() - 0.5) * 8, z: s.plant.z + (Math.random() - 0.5) * 8 };
+    }
+
+    if (g.mode === 'hostage') {
+      if (p.team === C.TEAM_CT) {
+        // 带领人质 → 回营救区；否则去找最近的空闲人质
+        const mine = g.hostages.find(h => h.leader === p);
+        if (mine) return { x: 26, z: -26 };
+        let best = null, bd = 1e9;
+        for (const h of g.hostages) {
+          if (h.state !== 'idle') continue;
+          const d = (h.x - p.x) ** 2 + (h.z - p.z) ** 2;
+          if (d < bd) { bd = d; best = h; }
+        }
+        if (best) return { x: best.x, z: best.z };
+        if (this.lastEnemySpot && Date.now() - this.lastEnemySpot.t < 6000) return { x: this.lastEnemySpot.x, z: this.lastEnemySpot.z };
+        return { x: 26, z: -26 };
+      }
+      // T：蹲守人质点
+      const sp = (MAP.hostageSpots || [])[Math.floor(Math.random() * (MAP.hostageSpots || []).length)] || { x: 0, z: 0 };
+      if (this.lastEnemySpot && Date.now() - this.lastEnemySpot.t < 6000) return { x: this.lastEnemySpot.x, z: this.lastEnemySpot.z };
+      return { x: sp.x + (Math.random() - 0.5) * 4, z: sp.z + (Math.random() - 0.5) * 4 };
     }
 
     if (p.team === C.TEAM_T) {
@@ -279,6 +300,15 @@ class BotBrain {
       this._lastStuckCheck = now;
     }
     if (!this.lastPos) { this.lastPos = { x: p.x, z: p.z }; this._lastStuckCheck = now; }
+
+    // 人质营救：靠近空闲人质按 E 带领
+    if (this.game.mode === 'hostage' && p.team === C.TEAM_CT) {
+      for (const h of this.game.hostages) {
+        if (h.state !== 'idle') continue;
+        const d = Math.hypot(h.x - p.x, h.z - p.z);
+        if (d < 2.2) { inp.use = true; inp.f = inp.b = inp.l = inp.r = false; break; }
+      }
+    }
 
     // 换弹：打空必换；低弹且无目标时概率换弹（修复 Bot 不换弹 bug）
     const bw = p.weapons[p.curSlot];

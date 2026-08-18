@@ -187,12 +187,21 @@ const HUD = (function () {
     if (ui.phase === 'freeze') el.phase.textContent = '❄ 冻结时间 — 按 B 购买装备';
     else if (ui.phase === 'end') el.phase.textContent = '回合结束';
     else if (ui.phase === 'live' && ui.mode === 'dm') el.phase.textContent = '死斗模式';
+    else if (ui.phase === 'live' && ui.mode === 'hostage') {
+      const teamTxt = ui.my ? (ui.my[8] === 0 ? '你是恐怖分子 T · 阻止营救' : '你是反恐精英 CT · 救回人质') : '';
+      el.phase.textContent = '人质 ' + (ui.rescued || 0) + '/4 · ' + teamTxt;
+    } else if (ui.phase === 'live' && ui.mode === 'armsrace' && ui.my) {
+      const lv = ui.my[30] || 0;
+      const ladder = ['匕首', 'Glock', 'USP', '沙鹰', 'MP5', 'AK-47', 'M4A1', 'AWP', '手雷', '最终刀战'];
+      const cur = WEAPONS.W[ui.my[10]] ? WEAPONS.W[ui.my[10]].name : ladder[lv];
+      el.phase.textContent = lv >= 9 ? '🔪 最终刀战！击杀即夺冠' : '军备竞赛 ' + (lv + 1) + '/9 · 当前: ' + cur + ' · 下一把: ' + (ladder[lv + 1] || '冠军');
+    }
     else el.phase.textContent = ui.my ? (ui.my[8] === 0 ? '你是恐怖分子 T' : '你是反恐精英 CT') : '';
     el.phase.style.display = el.phase.textContent ? '' : 'none';
   }
 
   // ---------- 雷达 ----------
-  function updateRadar(myPos, myYaw, players, bomb) {
+  function updateRadar(myPos, myYaw, players, bomb, hostages) {
     const ctx = el.radar.getContext('2d');
     const S = 170, R = S / 2;
     ctx.clearRect(0, 0, S, S);
@@ -224,6 +233,15 @@ const HUD = (function () {
       ctx.arc(p.x * sc, p.z * sc, 3.4, 0, Math.PI * 2);
       ctx.fill();
     });
+    // 人质（白点）
+    if (hostages) {
+      ctx.fillStyle = '#ffffff';
+      for (const h of hostages) {
+        ctx.beginPath();
+        ctx.arc(h[1] * sc, h[3] * sc, 3.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
     // 炸弹
     if (bomb && (bomb[0] === 'dropped' || bomb[0] === 'planted')) {
       const blink = Math.floor(performance.now() / 300) % 2 === 0;

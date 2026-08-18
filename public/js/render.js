@@ -185,10 +185,11 @@ const Render = (function () {
     // 墙体
     const wTex = wallTexture();
     const wMat = new THREE.MeshLambertMaterial({ map: wTex });
-    wallMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), wMat, MAPDATA.walls.length);
+    const plainWalls = MAPDATA.walls.filter(w => !w.crate && !w.cover);
+    wallMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), wMat, plainWalls.length);
     const m4 = new THREE.Matrix4();
     const wc = new THREE.Color();
-    MAPDATA.walls.forEach((w, i) => {
+    plainWalls.forEach((w, i) => {
       const dx = w.x2 - w.x1, dy = w.y2 - w.y1, dz = w.z2 - w.z1;
       m4.makeScale(dx, dy, dz);
       m4.setPosition((w.x1 + w.x2) / 2, (w.y1 + w.y2) / 2, (w.z1 + w.z2) / 2);
@@ -214,6 +215,41 @@ const Render = (function () {
     crateMesh.receiveShadow = true;
     scene.add(crateMesh);
 
+    // 新增掩体：沙袋（织物色）、油桶（圆柱）、水泥墩（灰色）
+    const covers = MAPDATA.covers || [];
+    const bagTex = makeCanvas(128, 64, (g, w, h) => {
+      g.fillStyle = '#7a6b4a'; g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 900; i++) {
+        g.fillStyle = `rgba(${90 + Math.random() * 40 | 0},${80 + Math.random() * 30 | 0},50,0.3)`;
+        g.fillRect(Math.random() * w, Math.random() * h, 1.6, 1.6);
+      }
+      g.strokeStyle = 'rgba(40,32,20,0.5)'; g.lineWidth = 3;
+      for (let y = 16; y < h; y += 16) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); }
+    });
+    const bagMap = new THREE.CanvasTexture(bagTex);
+    bagMap.colorSpace = THREE.SRGBColorSpace;
+    const bagMat = new THREE.MeshLambertMaterial({ map: bagMap });
+    const blockMat = new THREE.MeshLambertMaterial({ color: 0x8d9299 });
+    const barrelMat = new THREE.MeshLambertMaterial({ color: 0xb34a3a });
+    const bags = covers.filter(c => c.cover === 'sandbag');
+    const blocks = covers.filter(c => c.cover === 'block');
+    const barrels = covers.filter(c => c.cover === 'barrel');
+    function addCoverMesh(list, geo, mat) {
+      const im = new THREE.InstancedMesh(geo, mat, list.length);
+      list.forEach((w, i) => {
+        const dx = w.x2 - w.x1, dy = w.y2 - w.y1, dz = w.z2 - w.z1;
+        m4.makeScale(Math.max(0.01, dx), dy, Math.max(0.01, dz));
+        m4.setPosition((w.x1 + w.x2) / 2, (w.y1 + w.y2) / 2, (w.z1 + w.z2) / 2);
+        im.setMatrixAt(i, m4);
+      });
+      im.castShadow = true;
+      im.receiveShadow = true;
+      scene.add(im);
+    }
+    addCoverMesh(bags, new THREE.BoxGeometry(1, 1, 1), bagMat);
+    addCoverMesh(blocks, new THREE.BoxGeometry(1, 1, 1), blockMat);
+    addCoverMesh(barrels, new THREE.CylinderGeometry(0.5, 0.5, 1, 10), barrelMat);
+
     // 埋包点地标
     const decA = siteTexture('A', '#d24a2b');
     const mA = new THREE.Mesh(new THREE.PlaneGeometry(7.2, 7.2), new THREE.MeshBasicMaterial({ map: decA, transparent: true }));
@@ -234,6 +270,50 @@ const Render = (function () {
       d.rotation.y = dz < 0 ? -1.85 : 1.85;
       d.castShadow = true;
       scene.add(d);
+    }
+  }
+
+  // ---------- 人质模型（白衬衫举手姿势） ----------
+  const hostageMeshes = new Map(); // id -> group
+  function ensureHostage(id) {
+    let g = hostageMeshes.get(id);
+    if (!g) {
+      g = new THREE.Group();
+      const shirt = new THREE.MeshLambertMaterial({ color: 0xe8e4da });
+      const pants = new THREE.MeshLambertMaterial({ color: 0x4a5d7a });
+      const skin = new THREE.MeshLambertMaterial({ color: 0xd9a87c });
+      const legL = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.72, 0.16), pants);
+      legL.position.set(-0.1, 0.36, 0);
+      const legR = legL.clone(); legR.position.x = 0.1;
+      const torso = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.66, 0.26), shirt);
+      torso.position.set(0, 1.02, 0);
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.24, 0.22), skin);
+      head.position.set(0, 1.55, 0);
+      // 举起的双手（人质经典姿势）
+      const armL = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.5, 0.12), shirt);
+      armL.position.set(-0.28, 1.5, 0);
+      armL.rotation.z = 0.5;
+      const armR = armL.clone(); armR.position.x = 0.28; armR.rotation.z = -0.5;
+      g.add(legL, legR, torso, head, armL, armR);
+      g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+      scene.add(g);
+      hostageMeshes.set(id, g);
+    }
+    return g;
+  }
+
+  function updateHostages(list) {
+    const seen = new Set();
+    list.forEach(h => {
+      const [id, x, y, z, yaw] = h;
+      seen.add(id);
+      const g = ensureHostage(id);
+      g.visible = true;
+      g.position.set(x, y, z);
+      g.rotation.y = yaw;
+    });
+    for (const [id, g] of hostageMeshes) {
+      if (!seen.has(id)) g.visible = false;
     }
   }
 
@@ -848,7 +928,7 @@ const Render = (function () {
   function getCamera() { return camera; }
 
   return {
-    init, renderFrame, updatePlayers, tracer, impact, muzzleFlash, shell, flashAt, explosion, getCamera, updateNades, updateSmokes,
+    init, renderFrame, updatePlayers, tracer, impact, muzzleFlash, shell, flashAt, explosion, getCamera, updateNades, updateSmokes, updateHostages,
     // 测试辅助
     _debugTracerTotal: () => _tracerTotal,
     _debugTracerActive: () => tracerPool.filter(t => t.life > 0).length,

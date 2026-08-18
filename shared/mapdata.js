@@ -101,10 +101,58 @@
   ];
   var CRATE_S = 1.6, CRATE_H = 1.3;
   var crates = crateDefs.map(function (c) {
-    return box(c[0] - CRATE_S / 2, 0, c[1] - CRATE_S / 2, c[0] + CRATE_S / 2, CRATE_H, c[1] + CRATE_S / 2);
+    var b = box(c[0] - CRATE_S / 2, 0, c[1] - CRATE_S / 2, c[0] + CRATE_S / 2, CRATE_H, c[1] + CRATE_S / 2);
+    b.crate = true;
+    return b;
   });
 
-  var walls = wallsFromRooms().concat(crates);
+  // ---------- 新增掩体（沙袋/油桶/水泥墩，均为碰撞体） ----------
+  // 尺寸：sandbag 2.4×0.9（低矮可蹲射）、barrel 0.8×1.05、block 1.5×1.2
+  var coverDefs = {
+    sandbag: [
+      [-29, -19], [-17, -20],                     // A 点
+      [26, 18], [15, 19],                         // B 点
+      [-22, -10],                                 // 长道
+      [-14, -2], [-2, 16],                        // 中路
+      [-6, -22], [16, -21],                       // CT→A 走廊
+      [8, 23],                                    // 隧道
+      [23, 0]                                     // CT→B 走廊
+    ],
+    barrel: [
+      [-17, -20.6],                               // A 点（箱旁）
+      [30, 24],                                   // B 点
+      [-19, 2],                                   // 长道
+      [0, -12],                                   // 中路
+      [25, -12],                                  // CT→B 走廊
+      [-8, 26],                                   // 隧道
+      [-26, 21],                                  // T 家
+      [22, -24]                                   // CT 家
+    ],
+    block: [
+      [-31, -25],                                 // A 点
+      [17, 30],                                   // B 点
+      [-12, 12],                                  // 中路
+      [20, 6]                                     // CT→B 走廊
+    ]
+  };
+  var COVER_SIZE = { sandbag: [2.4, 0.9], barrel: [0.8, 1.05], block: [1.5, 1.2] };
+  var covers = [];
+  Object.keys(coverDefs).forEach(function (type) {
+    coverDefs[type].forEach(function (c) {
+      var w = COVER_SIZE[type][0], h = COVER_SIZE[type][1];
+      var b = box(c[0] - w / 2, 0, c[1] - w / 2, c[0] + w / 2, h, c[1] + w / 2);
+      b.cover = type;
+      covers.push(b);
+    });
+  });
+
+  // ---------- 人质营救模式：人质刷新点（可行走、不在掩体内） ----------
+  var hostageSpots = [
+    { x: -25, z: -30 }, { x: -17, z: -22 },       // A 点
+    { x: 25, z: 26 }, { x: 20, z: 19 }            // B 点
+  ];
+
+  var walls = wallsFromRooms().concat(crates).concat(covers);
 
   // ---------- 出生点 ----------
   var spawns = {
@@ -321,6 +369,8 @@
     rooms: rooms,
     walls: walls,
     crates: crates,
+    covers: covers,
+    hostageSpots: hostageSpots,
     spawns: spawns,
     buyZones: buyZones,
     sites: sites,

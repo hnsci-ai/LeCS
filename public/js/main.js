@@ -248,9 +248,10 @@ const Main = (function () {
     // 炸弹倒计时音
     if (snap.bomb && snap.bomb[0] === 'planted') Audio.bombBeep(snap.bomb[4]);
 
-    // 手雷渲染 + 烟雾弹烟团
+    // 手雷渲染 + 烟雾弹烟团 + 人质
     if (snap.nades) Render.updateNades(snap.nades);
     Render.updateSmokes(snap.smokes || []);
+    Render.updateHostages(snap.hostages || []);
 
     HUD.setKillfeed(snap.killfeed);
 
@@ -429,6 +430,23 @@ const Main = (function () {
           if (ev.id === 'hegrenade') S.inventory[4] = 'hegrenade';
         } else { Audio.denySound(); HUD.showMessage('购买失败：' + (ev.reason || ''), '#ff7a6b'); }
         break;
+      case 'hostage':
+        if (ev.event === 'follow') HUD.showMessage(ev.name + ' 带领了一名人质', '#ffe9b0');
+        if (ev.event === 'drop') HUD.showMessage('人质被遗留在原地', '#ff9d8a');
+        if (ev.event === 'rescue') {
+          HUD.showMessage(ev.name + ' 救出人质！（' + ev.rescued + '/4）', '#7dff9a');
+          Audio.rescueSound();
+        }
+        break;
+      case 'streak':
+        HUD.showMessage('🔥 ' + ev.name + ' ' + (ev.streak === 3 ? '3连杀' : ev.streak === 5 ? '5连杀 · 势不可挡' : '7连杀 · 无人能挡') + '！', '#ffb347');
+        if (ev.streak >= 5) HUD.showBanner((ev.streak === 5 ? '势不可挡！' : '无人能挡！'), 't');
+        Audio.streakSound();
+        break;
+      case 'armswin':
+        HUD.showBanner('🔫 ' + ev.name + ' 夺得枪王！', 'ct');
+        HUD.showMessage(ev.name + ' 完成军备竞赛全部武器，新一局开始！', '#ffce45');
+        break;
       case 'message':
         HUD.showMessage(ev.text, '#9fd3ff');
         break;
@@ -578,14 +596,17 @@ const Main = (function () {
       timeLeft: snap ? snap.timeLeft : 0,
       phase: snap ? snap.phase : 'live',
       mode: snap ? snap.mode : S.mode,
-      bomb: snap ? snap.bomb : null
+      bomb: snap ? snap.bomb : null,
+      hostages: snap ? snap.hostages : null,
+      rescued: snap ? snap.rescued : 0
     });
     if (HUD.buyOpen()) HUD.refreshBuyMenu(dispMe, canBuy());
     if (S.sim) {
       HUD.updateRadar(
         { x: S.sim.x, z: S.sim.z }, S.sim.yaw,
         Array.from(players.values()).filter(p => p.id !== S.myId),
-        snap ? snap.bomb : null
+        snap ? snap.bomb : null,
+        snap ? snap.hostages : null
       );
     }
 
