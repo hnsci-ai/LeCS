@@ -827,9 +827,17 @@ const Render = (function () {
     const armL = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.5, 0.12), cloth);
     armL.position.set(-0.3, 1.05, 0.1);
     const armR = armL.clone(); armR.position.x = 0.3;
+    // 防弹衣背心与头盔（默认隐藏，购买后显示）
+    const kevlarMat = new THREE.MeshLambertMaterial({ color: 0x4a5246 });
+    const vest = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.68, 0.3), kevlarMat);
+    vest.position.set(0, 1.03, 0);
+    vest.visible = false;
+    const helm = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.11, 0.25), kevlarMat);
+    helm.position.set(0, 1.665, 0);
+    helm.visible = false;
 
-    g.add(legL, legR, torso, head, armL, armR);
-    g.userData = { legL, legR, armL, armR, torso, walkPhase: 0, dead: 0 };
+    g.add(legL, legR, torso, head, armL, armR, vest, helm);
+    g.userData = { legL, legR, armL, armR, torso, vest, helm, walkPhase: 0, dead: 0 };
     g.castShadow = true;
     g.traverse(o => { if (o.isMesh) { o.castShadow = true; } });
     return g;
@@ -875,6 +883,10 @@ const Render = (function () {
         g.rotation.set(0, p.yaw, 0);
         const scale = p.crouch ? 0.72 : 1;
         g.scale.set(scale, scale, scale);
+        // 护甲外观：有防弹衣显示背心，戴头盔显示头盔
+        const ud0 = g.userData;
+        ud0.vest.visible = (p.armor || 0) > 0;
+        ud0.helm.visible = !!p.helmet;
         const sp = Math.hypot(m.vel.x, m.vel.z);
         m.vel.x += (p.vx - m.vel.x) * 0.3; m.vel.z += (p.vz - m.vel.z) * 0.3;
         // 时间基准步态（帧率无关，约 2.9 步/秒）
@@ -903,7 +915,7 @@ const Render = (function () {
         if (m.wasAlive) {
           // 死亡：布娃娃尸体（无血雾，几秒后沉没并变为战利品箱）
           m.wasAlive = false;
-          Ragdoll.spawn(p.id, p.x, p.y, p.z, p.yaw, p.team);
+          Ragdoll.spawn(p.id, p.x, p.y, p.z, p.yaw, p.team, p.armor, p.helmet);
         }
         g.visible = false; // 尸体由布娃娃物理呈现
       }
@@ -1187,6 +1199,13 @@ const Render = (function () {
     _debugDrawCalls: () => renderer.info.render.calls,
     _debugTriangles: () => renderer.info.render.triangles,
     _debugShadowOn: () => renderer.shadowMap.enabled,
+    _debugArmor: () => {
+      const out = {};
+      for (const [id, m] of playerMeshes) {
+        if (m.group.visible) out[id] = { vest: m.group.userData.vest.visible, helm: m.group.userData.helm.visible };
+      }
+      return out;
+    },
     _debugTracerActive: () => tracerPool.filter(t => t.life > 0).length,
     _debugMuzzleHasTex: () => muzzlePool.length > 0 && !!muzzlePool[0].mat.map,
     _debugPlayerGuns: () => {

@@ -81,7 +81,7 @@ const Ragdoll = (function () {
   }
 
   // 生成布娃娃
-  function spawn(id, x, y, z, yaw, team) {
+  function spawn(id, x, y, z, yaw, team, armor, helmet) {
     if (!world) return;
     if (active.has(id)) return;
     // 超过上限移除最老的
@@ -156,7 +156,26 @@ const Ragdoll = (function () {
     bodyMap.pelvis.applyImpulse(new CANNON.Vec3(imp.x * 0.5, imp.y * 0.4, imp.z * 0.5));
     hitInfo.delete(id);
 
-    const r = { id, bodies, meshes, constraints, mats, born: performance.now(), fading: false };
+    // 护甲外观：尸体上保留防弹衣背心/头盔（跟随躯干/头部刚体）
+    const extras = [];
+    if ((armor || 0) > 0 || helmet) {
+      const kevlarMat = new THREE.MeshLambertMaterial({ color: 0x4a5246 });
+      mats.push(kevlarMat);
+      if ((armor || 0) > 0) {
+        const vest = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.44, 0.3), kevlarMat);
+        vest.castShadow = true;
+        scene.add(vest);
+        extras.push({ mesh: vest, body: 1, offY: -0.02 }); // torso
+      }
+      if (helmet) {
+        const helm = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.11, 0.25), kevlarMat);
+        helm.castShadow = true;
+        scene.add(helm);
+        extras.push({ mesh: helm, body: 2, offY: 0.15 }); // head
+      }
+    }
+
+    const r = { id, bodies, meshes, constraints, mats, extras, born: performance.now(), fading: false };
     active.set(id, r);
   }
 
@@ -170,6 +189,7 @@ const Ragdoll = (function () {
     for (const b of r.bodies) world.removeBody(b);
     for (const c of r.constraints) world.removeConstraint(c);
     for (const m of r.meshes) scene.remove(m);
+    for (const e of r.extras) scene.remove(e.mesh);
     for (const m of r.mats) m.dispose();
   }
 
@@ -182,6 +202,12 @@ const Ragdoll = (function () {
       for (let i = 0; i < r.bodies.length; i++) {
         r.meshes[i].position.copy(r.bodies[i].position);
         r.meshes[i].quaternion.copy(r.bodies[i].quaternion);
+      }
+      // 护甲外观跟随对应刚体
+      for (const e of r.extras) {
+        e.mesh.position.copy(r.bodies[e.body].position);
+        e.mesh.position.y += e.offY;
+        e.mesh.quaternion.copy(r.bodies[e.body].quaternion);
       }
       const age = now - r.born;
       // 硬性兜底：超过 5 秒无条件移除
@@ -198,6 +224,7 @@ const Ragdoll = (function () {
           for (let i = 0; i < r.meshes.length; i++) {
             r.meshes[i].position.y -= (1 - op) * 0.06; // 下沉
           }
+          for (const e of r.extras) e.mesh.position.y -= (1 - op) * 0.06;
         }
         if (op <= 0) removeRagdoll(r);
       }
@@ -219,5 +246,5 @@ const Ragdoll = (function () {
     return out;
   }
 
-  return { init, spawn, removeFor, registerHit, update, clearAll, _debugCount, _debugState };
+  return { init, spawn, removeFor, registerHit, update, clearAll, _debugCount, _debugState, _debugExtras: () => Array.from(active.values()).map(r => r.extras.length) };
 })();

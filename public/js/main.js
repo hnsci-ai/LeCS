@@ -544,7 +544,9 @@ const Main = (function () {
         team: e2[8],
         vx: e2[26], vz: e2[27],
         weapon: e2[10],
-        scoped: e2[29] || 0
+        scoped: e2[29] || 0,
+        armor: e2[7] || 0,        // 防弹衣耐久（>0 显示背心）
+        helmet: e2[20] === 1      // 是否戴头盔
       });
     }
     return out;
