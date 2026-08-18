@@ -100,36 +100,6 @@ const Render = (function () {
     return t;
   }
 
-  // 布料纹理（织纹 + 噪点）
-  function clothTexture(base) {
-    const c = makeCanvas(64, 64, (g, w, h) => {
-      g.fillStyle = base; g.fillRect(0, 0, w, h);
-      for (let i = 0; i < 320; i++) {
-        g.fillStyle = Math.random() < 0.5 ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.06)';
-        g.fillRect(Math.random() * w, Math.random() * h, 1.6, 1.6);
-      }
-      for (let y = 0; y < h; y += 4) { g.fillStyle = 'rgba(0,0,0,0.07)'; g.fillRect(0, y, w, 1); }
-    });
-    const t = new THREE.CanvasTexture(c);
-    t.colorSpace = THREE.SRGBColorSpace;
-    return t;
-  }
-  function vestTexture(base) {
-    const c = makeCanvas(64, 64, (g, w, h) => {
-      g.fillStyle = base; g.fillRect(0, 0, w, h);
-      for (let i = 0; i < 260; i++) {
-        g.fillStyle = 'rgba(0,0,0,0.12)';
-        g.fillRect(Math.random() * w, Math.random() * h, 2, 2);
-      }
-      // 战术缝线
-      g.strokeStyle = 'rgba(0,0,0,0.3)'; g.lineWidth = 2;
-      g.strokeRect(8, 8, w - 16, h - 16);
-      g.beginPath(); g.moveTo(8, h / 2); g.lineTo(w - 8, h / 2); g.stroke();
-    });
-    const t = new THREE.CanvasTexture(c);
-    t.colorSpace = THREE.SRGBColorSpace;
-    return t;
-  }
   function gunMetalTexture() {
     const c = makeCanvas(64, 64, (g, w, h) => {
       g.fillStyle = '#31363d'; g.fillRect(0, 0, w, h);
@@ -649,19 +619,6 @@ const Render = (function () {
   const GUN_TMETAL = new THREE.MeshLambertMaterial({ map: gunMetalTexture(), color: 0xc2c8d0 });
   const GUN_TPOLY = new THREE.MeshLambertMaterial({ color: 0x23262b });
   const GUN_TWOOD = new THREE.MeshLambertMaterial({ map: gunWoodTexture(), color: 0xc8a070 });
-  // 人物布料纹理按阵营缓存（修复：每个玩家模型新建 3 张纹理）
-  const clothTexCache = new Map();
-  const vestTexCache = new Map();
-  function teamCloth(hex) {
-    let t = clothTexCache.get(hex);
-    if (!t) { t = clothTexture(hex); clothTexCache.set(hex, t); }
-    return t;
-  }
-  function teamVest(hex) {
-    let t = vestTexCache.get(hex);
-    if (!t) { t = vestTexture(hex); vestTexCache.set(hex, t); }
-    return t;
-  }
 
   function buildThirdGun(id) {
     if (!id) return null;
@@ -846,64 +803,24 @@ const Render = (function () {
     const g = new THREE.Group();
     const skin = new THREE.MeshLambertMaterial({ color: 0xd9a87c });
     const teamCol = team === GAMECONST.TEAM_T ? 0xc87f3a : 0x4f78a4;
-    const vestCol = team === GAMECONST.TEAM_T ? 0x8a5424 : 0x2f4a68;
-    const pantsCol = team === GAMECONST.TEAM_T ? 0x4a4436 : 0x33445c;
-    const cloth = new THREE.MeshLambertMaterial({ map: teamCloth(team === GAMECONST.TEAM_T ? '#c87f3a' : '#4f78a4') });
-    const vest = new THREE.MeshLambertMaterial({ map: teamVest(team === GAMECONST.TEAM_T ? '#8a5424' : '#2f4a68') });
-    const pants = new THREE.MeshLambertMaterial({ map: teamCloth(team === GAMECONST.TEAM_T ? '#4a4436' : '#33445c') });
-    const helmetM = new THREE.MeshLambertMaterial({ color: vestCol });
-    const boots = new THREE.MeshLambertMaterial({ color: 0x26221e });
-    const handM = new THREE.MeshLambertMaterial({ color: 0xc9926b });
+    const cloth = new THREE.MeshLambertMaterial({ color: teamCol });
+    const dark = new THREE.MeshLambertMaterial({ color: team === GAMECONST.TEAM_T ? 0x8a5a28 : 0x35506e });
 
-    const lower = new THREE.Group();
-    const upper = new THREE.Group();
-    upper.position.y = 0.45; // 上半身坐在骨盆上方
-    g.add(lower, upper);
+    const legL = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.72, 0.16), dark);
+    legL.position.set(-0.1, 0.36, 0);
+    const legR = legL.clone(); legR.position.x = 0.1;
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.66, 0.26), cloth);
+    torso.position.set(0, 1.02, 0);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.24, 0.22), skin);
+    head.position.set(0, 1.55, 0);
+    const armL = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.5, 0.12), cloth);
+    armL.position.set(-0.3, 1.05, 0.1);
+    const armR = armL.clone(); armR.position.x = 0.3;
 
-    const part = (w, h, d, mat, x, y, z, pivotY, parent) => {
-      const geo = new THREE.BoxGeometry(w, h, d);
-      if (pivotY !== undefined) geo.translate(0, pivotY, 0); // 枢轴移到关节
-      const m = new THREE.Mesh(geo, mat);
-      m.position.set(x, y, z);
-      m.castShadow = true;
-      parent.add(m);
-      return m;
-    };
-
-    // ---- 下半身（局部坐标，y=0 为地面）----
-    const bootL = part(0.15, 0.1, 0.24, boots, -0.1, 0.05, 0.02, undefined, lower);
-    const bootR = part(0.15, 0.1, 0.24, boots, 0.1, 0.05, 0.02, undefined, lower);
-    const calfL = part(0.13, 0.3, 0.15, pants, -0.1, 0.25, 0, 0.15, lower);   // 枢轴在膝(0.4)
-    const calfR = part(0.13, 0.3, 0.15, pants, 0.1, 0.25, 0, 0.15, lower);
-    const thighL = part(0.15, 0.36, 0.17, pants, -0.1, 0.58, 0, 0.18, lower); // 枢轴在髋(0.76)
-    const thighR = part(0.15, 0.36, 0.17, pants, 0.1, 0.58, 0, 0.18, lower);
-    const belt = part(0.4, 0.08, 0.26, boots, 0, 0.8, 0, undefined, lower);
-    const pelvis = part(0.36, 0.2, 0.22, pants, 0, 0.9, 0, undefined, lower);
-
-    // ---- 上半身（局部坐标，0.45 即骨盆顶）----
-    const chest = part(0.42, 0.32, 0.24, cloth, 0, 0.67, 0, undefined, upper);   // 世界 1.12
-    const vestMesh = part(0.48, 0.34, 0.3, vest, 0, 0.71, 0, undefined, upper);
-    const shoulderL = part(0.13, 0.1, 0.16, vest, -0.27, 0.85, 0, undefined, upper);
-    const shoulderR = part(0.13, 0.1, 0.16, vest, 0.27, 0.85, 0, undefined, upper);
-    const neck = part(0.11, 0.07, 0.11, skin, 0, 1.0, 0, undefined, upper);      // 世界 1.45
-    const head = part(0.2, 0.19, 0.2, skin, 0, 1.135, 0, undefined, upper);      // 世界 1.585
-    const helm = part(0.23, 0.09, 0.23, helmetM, 0, 1.24, 0, undefined, upper);  // 世界 1.69
-    const brim = part(0.25, 0.02, 0.07, helmetM, 0, 1.215, 0.1, undefined, upper);
-    // 手臂：上臂(枢轴肩 1.3) + 前臂(枢轴肘 1.06) + 手(0.82)
-    const upperArmL = part(0.1, 0.24, 0.12, cloth, -0.28, 0.85, 0.06, 0.12, upper);
-    const upperArmR = part(0.1, 0.24, 0.12, cloth, 0.28, 0.85, 0.06, 0.12, upper);
-    const foreArmL = part(0.09, 0.22, 0.11, cloth, -0.28, 0.61, 0.06, 0.11, upper);
-    const foreArmR = part(0.09, 0.22, 0.11, cloth, 0.28, 0.61, 0.06, 0.11, upper);
-    const handL = part(0.08, 0.09, 0.1, handM, -0.28, 0.37, 0.06, undefined, upper);
-    const handR = part(0.08, 0.09, 0.1, handM, 0.28, 0.37, 0.06, undefined, upper);
-
-    g.userData = {
-      lower, upper, thighL, thighR, calfL, calfR,
-      upperArmL, upperArmR, foreArmL, foreArmR,
-      chest, vestMesh, head, helm, brim, belt,
-      walkPhase: 0, dead: 0
-    };
-    g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    g.add(legL, legR, torso, head, armL, armR);
+    g.userData = { legL, legR, armL, armR, torso, walkPhase: 0, dead: 0 };
+    g.castShadow = true;
+    g.traverse(o => { if (o.isMesh) { o.castShadow = true; } });
     return g;
   }
 
@@ -954,28 +871,16 @@ const Render = (function () {
         const ph = g.userData.walkPhase;
         const swing = Math.sin(ph) * Math.min(0.7, sp * 0.22);
         const ud = g.userData;
-        // 腿：大腿摆 + 小腿随动弯曲（蹲姿为蹲踞折叠）
-        ud.thighL.rotation.x = p.crouch ? 0.9 : swing;
-        ud.thighR.rotation.x = p.crouch ? 0.9 : -swing;
-        ud.calfL.rotation.x = p.crouch ? -1.25 : 0.32 + Math.max(0, -swing) * 0.7;
-        ud.calfR.rotation.x = p.crouch ? -1.25 : 0.32 + Math.max(0, swing) * 0.7;
-        // 手臂：大臂摆 + 前臂自然微弯
-        ud.upperArmL.rotation.x = -swing * 0.5;
-        ud.upperArmR.rotation.x = swing * 0.5;
-        ud.foreArmL.rotation.x = 0.42;
-        ud.foreArmR.rotation.x = 0.42;
-        // 身体起伏与奔跑前倾
-        const bob = Math.abs(Math.sin(ph)) * Math.min(0.02, sp * 0.004);
-        const lean = Math.min(0.14, sp * 0.028);
-        ud.upper.position.y = (p.crouch ? 0.23 : 0.45) + bob;
-        ud.upper.rotation.x = -lean;
-        // 受击踉跄（躯干后仰 + 侧抖）
+        ud.legL.rotation.x = swing;
+        ud.legR.rotation.x = -swing;
+        ud.armL.rotation.x = -swing * 0.4;
+        ud.armR.rotation.x = swing * 0.4;
+        // 受击踉跄（躯干后仰）
         if (m.flinch > 0) {
           m.flinch -= 0.14;
-          ud.upper.rotation.x += Math.max(0, m.flinch) * 0.3;
-          ud.upper.rotation.z = Math.sin(m.flinch * 25) * 0.09 * Math.max(0, m.flinch);
+          ud.torso.rotation.x = Math.max(0, m.flinch) * 0.3;
         } else {
-          ud.upper.rotation.z = 0;
+          ud.torso.rotation.x = 0;
         }
         // 跑动尘土        // 跑动尘土
         m.dustT = (m.dustT || 0) - 1;
