@@ -175,7 +175,12 @@ const Ragdoll = (function () {
       }
     }
 
-    const r = { id, bodies, meshes, constraints, mats, extras, born: performance.now(), fading: false };
+    const r = { id, bodies, meshes, constraints, mats, extras, born: performance.now(), fading: false, timer: null };
+    // 硬性定时清理：不依赖渲染循环/帧率，2.5 秒后无条件移除（用户反馈尸体 10 秒不消失）
+    r.timer = setTimeout(() => {
+      const rr = active.get(id);
+      if (rr) removeRagdoll(rr);
+    }, 2500);
     active.set(id, r);
   }
 
@@ -186,6 +191,7 @@ const Ragdoll = (function () {
 
   function removeRagdoll(r) {
     active.delete(r.id);
+    if (r.timer) clearTimeout(r.timer);
     for (const b of r.bodies) world.removeBody(b);
     for (const c of r.constraints) world.removeConstraint(c);
     for (const m of r.meshes) scene.remove(m);
@@ -210,15 +216,15 @@ const Ragdoll = (function () {
         e.mesh.quaternion.copy(r.bodies[e.body].quaternion);
       }
       const age = now - r.born;
-      // 硬性兜底：超过 5 秒无条件移除
+      // 硬性兜底：超过 5 秒无条件移除（另有 2.5 秒 setTimeout 定时清理双保险）
       if (age > 5000) { removeRagdoll(r); continue; }
-      if (age > 1200) {
-        // 1.2 秒后开始下沉淡出（约 2 秒完全消失）
+      if (age > 900) {
+        // 0.9 秒后开始下沉淡出（约 1.7 秒完全消失）
         if (!r.fading) {
           r.fading = true;
           for (const m of r.mats) m.transparent = true;
         }
-        const op = Math.max(0, 1 - (age - 1200) / 800);
+        const op = Math.max(0, 1 - (age - 900) / 800);
         for (const m of r.mats) m.opacity = op;
         if (r.fading) {
           for (let i = 0; i < r.meshes.length; i++) {
