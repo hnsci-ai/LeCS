@@ -1,0 +1,19 @@
+{
+  "name": "lecs",
+  "version": "1.0.0",
+  "description": "LeCS - 网页版 CS 1.6 风格 3D 对战游戏（多人 + Bot）",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node test/maptest.js && node test/smoke.js",
+    "test:browser": "node test/browser.js",
+    "test:all": "node test/maptest.js && node test/smoke.js && node test/browser.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "playwright-core": "^1.62.1"
+  }
+}

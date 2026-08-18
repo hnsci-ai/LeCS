@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LeCS 1.6 — 网页版 CS 对战</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ============ 大厅 ============ -->
+<div id="lobby">
+  <div class="lobby-box">
+    <div class="logo">LeCS<span>1.6</span></div>
+    <p class="sub">网页版 CS 1.6 风格 3D 对战 · 多人联机 + 电脑玩家</p>
+    <div class="row">
+      <label>昵称</label>
+      <input id="nick" maxlength="16" value="玩家">
+    </div>
+    <div class="row">
+      <label>模式</label>
+      <select id="mode">
+        <option value="classic">经典爆破（埋包 / 拆弹）</option>
+        <option value="dm">死斗模式（无限复活）</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>阵营</label>
+      <select id="team">
+        <option value="auto">随机</option>
+        <option value="ct">反恐精英 CT</option>
+        <option value="t">恐怖分子 T</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>电脑数量</label>
+      <input type="range" id="botcount" min="0" max="9" value="4">
+      <span id="botcount-label" class="val">4</span>
+    </div>
+    <div class="row">
+      <label>电脑难度</label>
+      <select id="botdiff">
+        <option value="easy">简单</option>
+        <option value="normal" selected>普通</option>
+        <option value="hard">困难</option>
+      </select>
+    </div>
+    <div class="buttons">
+      <button id="btn-practice" class="primary">单人对战电脑</button>
+      <button id="btn-create">创建房间（联机）</button>
+      <div class="join-row">
+        <input id="code" maxlength="4" placeholder="房间码" autocomplete="off" spellcheck="false">
+        <button id="btn-join">加入房间</button>
+      </div>
+    </div>
+    <p id="lobby-msg" class="msg"></p>
+    <div class="tips">
+      <b>操作说明</b><br>
+      WASD 移动 · 鼠标左键射击 / 右键刀刺 · Shift 静步 · Ctrl 蹲 · 空格跳<br>
+      R 换弹 · B 买枪 · E 埋包/拆弹 · Tab 记分板 · 1-5 切武器 · F3/F4 增删Bot
+    </div>
+  </div>
+</div>
+
+<!-- ============ 游戏 ============ -->
+<div id="game" class="hidden">
+  <canvas id="gl"></canvas>
+
+  <div id="hud" class="hidden">
+    <!-- 顶部中央：比分/计时 -->
+    <div id="top-center">
+      <div id="tc-scores"><span id="score-t">0</span><span id="tc-vs">:</span><span id="score-ct">0</span></div>
+      <div id="tc-timer">0:00</div>
+      <div id="tc-phase"></div>
+    </div>
+
+    <!-- 雷达 -->
+    <div id="radar-wrap"><canvas id="radar" width="170" height="170"></canvas></div>
+
+    <!-- 击杀榜 -->
+    <div id="killfeed"></div>
+
+    <!-- 左下：生命/护甲 -->
+    <div id="bottom-left">
+      <div class="hp-row">
+        <div class="hp-icon">❤</div>
+        <div class="hp-val" id="hp-val">100</div>
+        <div class="hp-bar"><div id="hp-fill"></div></div>
+      </div>
+      <div class="armor-row">
+        <div class="armor-icon">🛡</div>
+        <div class="armor-val" id="armor-val">0</div>
+        <div class="armor-bar"><div id="armor-fill"></div></div>
+      </div>
+      <div id="gear-icons"></div>
+    </div>
+
+    <!-- 右下：弹药/金钱 -->
+    <div id="bottom-right">
+      <div id="weapon-name">USP</div>
+      <div class="ammo-row"><span id="ammo-mag">12</span><span class="sep">/</span><span id="ammo-res">100</span></div>
+      <div id="money">$800</div>
+    </div>
+
+    <!-- 准星 -->
+    <div id="crosshair"><div id="ch-center"></div></div>
+    <div id="hitmarker"></div>
+
+    <!-- AWP 狙击镜 -->
+    <div id="scope-overlay" class="hidden">
+      <div class="scope-vignette"></div>
+      <div class="scope-cross-h"></div>
+      <div class="scope-cross-v"></div>
+    </div>
+
+    <!-- 受击指示 -->
+    <div id="dmg-ind"></div>
+
+    <!-- 中央消息 -->
+    <div id="msg-center"></div>
+    <div id="banner"></div>
+
+    <!-- 进度条（埋包/拆包） -->
+    <div id="progress-wrap" class="hidden"><div id="progress-bar"></div><div id="progress-label"></div></div>
+
+    <!-- 死亡/观战 -->
+    <div id="death-screen" class="hidden">
+      <div class="death-title">你已阵亡</div>
+      <div class="death-sub">正在观战队友…（下一回合重新加入）</div>
+    </div>
+    <div id="spec-banner" class="hidden">观战中 · 下一回合参战</div>
+
+    <!-- 房间信息 -->
+    <div id="room-info">
+      <span>房间 <b id="room-code">----</b></span>
+      <button id="copy-code">复制</button>
+      <button id="btn-addbot">＋Bot</button>
+      <button id="btn-removebot">－Bot</button>
+      <span id="room-hint">将房间码发给好友即可联机</span>
+    </div>
+  </div>
+
+  <!-- 点击进入 -->
+  <div id="click-block">
+    <div class="click-title">点击进入游戏</div>
+    <div class="click-sub">鼠标将被锁定 · 按 Esc 释放</div>
+  </div>
+
+  <!-- 购买菜单 -->
+  <div id="buymenu" class="hidden">
+    <div class="buy-head">购买装备 <span class="buy-close">(B 关闭)</span></div>
+    <div id="buy-sections"></div>
+    <div class="buy-foot">点击或按数字键购买 · 只能在购买区/回合开始购买</div>
+  </div>
+
+  <!-- 记分板 -->
+  <div id="scoreboard" class="hidden">
+    <div class="sb-head">记分板 <span id="sb-round"></span></div>
+    <div id="sb-table"></div>
+  </div>
+
+  <!-- 断开连接 -->
+  <div id="connlost" class="hidden">
+    <div class="lost-title">连接已断开</div>
+    <div class="lost-sub">正在尝试重新连接…</div>
+  </div>
+</div>
+
+<script src="vendor/three.min.js"></script>
+<script src="vendor/cannon-es.js"></script>
+<script src="/shared/constants.js"></script>
+<script src="/shared/weapons.js"></script>
+<script src="/shared/mapdata.js"></script>
+<script src="/shared/movement.js"></script>
+<script src="js/input.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/ragdoll.js"></script>
+<script src="js/render.js"></script>
+<script src="js/viewmodel.js"></script>
+<script src="js/hud.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

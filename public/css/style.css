@@ -1,0 +1,279 @@
+/* LeCS 样式 — CS 风格 HUD */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: #0c0e10; }
+body {
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: #e8e8e8;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.hidden { display: none !important; }
+input, select, button { font-family: inherit; }
+
+/* ============ 大厅 ============ */
+#lobby {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: center;
+  background:
+    radial-gradient(ellipse at 50% 20%, rgba(60,80,110,.35), transparent 60%),
+    linear-gradient(180deg, #10151b 0%, #0a0d10 100%);
+}
+.lobby-box {
+  width: 420px; padding: 34px 38px 26px;
+  background: rgba(22,28,34,.92);
+  border: 1px solid #2c3642;
+  border-radius: 10px;
+  box-shadow: 0 18px 60px rgba(0,0,0,.55);
+}
+.logo { font-size: 46px; font-weight: 800; letter-spacing: 2px; color: #f5f5f5; }
+.logo span { color: #ffce45; font-size: 22px; vertical-align: super; margin-left: 2px; }
+.sub { color: #8b96a3; font-size: 13px; margin: 2px 0 22px; }
+.row { display: flex; align-items: center; margin-bottom: 12px; }
+.row label { width: 74px; color: #aab4bf; font-size: 14px; }
+.row input[type=text], .row select, .row input:not([type=range]) {
+  flex: 1; padding: 8px 10px; font-size: 14px;
+  background: #141a20; color: #eee; border: 1px solid #2e3946; border-radius: 5px; outline: none;
+}
+.row input:focus, .row select:focus { border-color: #ffce45; }
+.row input[type=range] { flex: 1; accent-color: #ffce45; }
+.row .val { width: 34px; text-align: right; color: #ffce45; font-weight: 700; }
+.buttons { margin-top: 18px; }
+.buttons button {
+  display: block; width: 100%; margin-bottom: 10px; padding: 11px;
+  font-size: 15px; font-weight: 700; cursor: pointer;
+  background: #202a33; color: #e6e6e6; border: 1px solid #38434f; border-radius: 6px;
+}
+.buttons button:hover { background: #29343f; border-color: #4a5866; }
+.buttons button.primary { background: #c79a2e; border-color: #e0b23e; color: #1a1405; }
+.buttons button.primary:hover { background: #ddae36; }
+.join-row { display: flex; gap: 8px; }
+.join-row input {
+  flex: 1; padding: 9px 10px; font-size: 15px; letter-spacing: 6px; text-align: center;
+  text-transform: uppercase; background: #141a20; color: #ffce45; font-weight: 700;
+  border: 1px solid #2e3946; border-radius: 6px; outline: none;
+}
+.join-row button { flex: 0 0 auto; margin: 0; padding: 9px 16px; }
+.msg { margin-top: 12px; font-size: 13px; color: #ff7a6b; min-height: 18px; }
+.tips { margin-top: 16px; font-size: 12px; line-height: 1.8; color: #6b7682; border-top: 1px dashed #2a333d; padding-top: 12px; }
+.tips b { color: #96a2ae; }
+
+/* ============ 游戏画布 ============ */
+#game { position: fixed; inset: 0; }
+#gl { width: 100%; height: 100%; display: block; }
+
+/* ============ HUD 通用 ============ */
+#hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+#hud button { pointer-events: auto; }
+
+/* 顶部中央 */
+#top-center {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+  text-align: center;
+}
+#tc-scores { font-size: 24px; font-weight: 800; letter-spacing: 2px; text-shadow: 0 1px 4px #000; }
+#score-t { color: #ffb347; }
+#tc-vs { color: #66707c; margin: 0 6px; }
+#score-ct { color: #5fa8e8; }
+#tc-timer { font-size: 17px; color: #dfe6ec; text-shadow: 0 1px 4px #000; font-variant-numeric: tabular-nums; }
+#tc-phase { font-size: 12px; color: #ffce45; text-shadow: 0 1px 3px #000; min-height: 16px; }
+
+/* 雷达 */
+#radar-wrap {
+  position: absolute; top: 12px; left: 12px;
+  width: 170px; height: 170px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,.18);
+  background: rgba(8,14,10,.55);
+  overflow: hidden;
+}
+#radar { display: block; }
+
+/* 击杀榜 */
+#killfeed {
+  position: absolute; top: 14px; right: 14px;
+  display: flex; flex-direction: column; gap: 4px; align-items: flex-end;
+}
+.kf-entry {
+  background: rgba(10,14,18,.72); padding: 4px 10px; border-radius: 4px;
+  font-size: 13px; text-shadow: 0 1px 2px #000; animation: kf-in .18s ease-out;
+  border-left: 3px solid #555;
+}
+@keyframes kf-in { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+.kf-entry.t { border-left-color: #ffb347; }
+.kf-entry.ct { border-left-color: #5fa8e8; }
+.kf-entry .kw { color: #ffce45; }
+.kf-entry .hs { color: #ff5f4d; font-weight: 700; }
+
+/* 左下 生命 */
+#bottom-left { position: absolute; left: 20px; bottom: 18px; }
+.hp-row, .armor-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.hp-icon, .armor-icon { width: 22px; text-align: center; font-size: 16px; }
+.hp-val { width: 40px; font-size: 26px; font-weight: 800; color: #e8e8e8; text-shadow: 0 1px 3px #000; font-variant-numeric: tabular-nums; }
+.hp-bar, .armor-bar { width: 150px; height: 10px; background: rgba(0,0,0,.5); border-radius: 3px; overflow: hidden; }
+#hp-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #4caf50, #8bc34a); transition: width .15s; }
+.armor-val { width: 40px; font-size: 16px; font-weight: 700; color: #9fd3ff; text-shadow: 0 1px 3px #000; }
+#armor-fill { height: 100%; width: 0%; background: #4d90c9; transition: width .15s; }
+#gear-icons { margin-top: 6px; font-size: 14px; letter-spacing: 3px; min-height: 18px; color: #ffce45; }
+
+/* 右下 弹药 */
+#bottom-right { position: absolute; right: 22px; bottom: 16px; text-align: right; }
+#weapon-name { font-size: 15px; color: #aeb8c2; text-shadow: 0 1px 3px #000; margin-bottom: 2px; }
+.ammo-row { font-size: 32px; font-weight: 800; text-shadow: 0 2px 4px #000; line-height: 1; }
+#ammo-mag { color: #ffe9b0; }
+.ammo-row .sep { color: #55606b; margin: 0 3px; }
+#ammo-res { color: #8b96a3; font-size: 22px; }
+#money { font-size: 18px; font-weight: 700; color: #ffce45; text-shadow: 0 1px 3px #000; margin-top: 4px; }
+
+/* 准星 */
+#crosshair { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+#ch-center { width: 4px; height: 4px; border-radius: 50%; background: rgba(120,255,150,.95); box-shadow: 0 0 3px #000; }
+
+/* AWP 狙击镜 */
+#scope-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 15; }
+.scope-vignette {
+  position: absolute; inset: 0;
+  background: radial-gradient(circle at center, transparent 0%, transparent 32%, rgba(0,0,0,0.985) 40%);
+}
+.scope-cross-h, .scope-cross-v {
+  position: absolute; left: 50%; top: 50%;
+  background: rgba(0,0,0,0.9);
+  transform: translate(-50%, -50%);
+}
+.scope-cross-h { width: 160%; height: 1.5px; }
+.scope-cross-v { width: 1.5px; height: 160%; }
+#scope-overlay::after {
+  content: ""; position: absolute; left: 50%; top: 50%;
+  width: 3px; height: 3px; border-radius: 50%;
+  background: rgba(0,0,0,0.85);
+  transform: translate(-50%, -50%);
+}
+
+/* 命中提示 */
+#hitmarker {
+  position: absolute; left: 50%; top: 50%; width: 26px; height: 26px;
+  transform: translate(-50%, -50%); opacity: 0; pointer-events: none;
+}
+#hitmarker::before, #hitmarker::after, #hitmarker .hm-v::before, #hitmarker .hm-v::after { content: ""; position: absolute; background: #fff; }
+#hitmarker.show { opacity: 1; animation: hm .25s; }
+#hitmarker.head { opacity: 1; animation: hmh .3s; }
+#hitmarker.head::before, #hitmarker.head::after, #hitmarker.head .hm-v::before, #hitmarker.head .hm-v::after { background: #ff4b3a; }
+@keyframes hm { 0% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes hmh { 0% { opacity: 1; transform: translate(-50%,-50%) rotate(45deg) scale(1.3); } 100% { opacity: 0; transform: translate(-50%,-50%) rotate(45deg) scale(1); } }
+
+/* 受击方向 */
+#dmg-ind {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  background: conic-gradient(from 0deg, transparent 0deg, transparent 40deg, rgba(255,40,20,.55) 60deg, transparent 80deg, transparent 360deg);
+  -webkit-mask-image: radial-gradient(ellipse at center, transparent 55%, #000 75%);
+  mask-image: radial-gradient(ellipse at center, transparent 55%, #000 75%);
+  transition: opacity .5s;
+}
+
+/* 中央消息与横幅 */
+#msg-center {
+  position: absolute; top: 84px; left: 50%; transform: translateX(-50%);
+  text-align: center; font-size: 14px; color: #d8dee4; text-shadow: 0 1px 3px #000;
+}
+#msg-center .m { margin-bottom: 4px; animation: msg-in .2s; }
+@keyframes msg-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; } }
+#banner {
+  position: absolute; top: 38%; left: 50%; transform: translate(-50%,-50%);
+  font-size: 44px; font-weight: 900; letter-spacing: 4px; text-shadow: 0 3px 10px #000;
+  opacity: 0; pointer-events: none;
+}
+#banner.show { animation: banner .18s ease-out forwards; }
+@keyframes banner { from { opacity: 0; transform: translate(-50%,-46%) scale(.9); } to { opacity: 1; transform: translate(-50%,-50%) scale(1); } }
+#banner.t { color: #ffb347; }
+#banner.ct { color: #6db4f0; }
+
+/* 进度条 */
+#progress-wrap { position: absolute; left: 50%; top: 62%; transform: translateX(-50%); width: 300px; }
+#progress-bar { height: 10px; background: rgba(0,0,0,.55); border-radius: 5px; overflow: hidden; }
+#progress-bar::after { content: ""; display: block; height: 100%; width: var(--p, 0%); background: #ffce45; transition: width .1s linear; }
+#progress-label { text-align: center; font-size: 13px; margin-top: 5px; color: #ffe9b0; text-shadow: 0 1px 3px #000; }
+
+/* 死亡 */
+#death-screen {
+  position: absolute; inset: 0; z-index: 20; pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 30%, rgba(90,0,0,.55) 100%);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+}
+.death-title { font-size: 42px; font-weight: 900; color: #ff6a5a; text-shadow: 0 3px 12px #000; letter-spacing: 6px; }
+.death-sub { font-size: 14px; color: #c8ced6; text-shadow: 0 1px 4px #000; }
+#spec-banner {
+  position: absolute; top: 26%; left: 50%; transform: translateX(-50%);
+  padding: 6px 18px; background: rgba(10,14,18,.7); border-radius: 20px;
+  font-size: 14px; color: #ffce45; text-shadow: 0 1px 3px #000;
+}
+
+/* 房间信息 */
+#room-info {
+  position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(10,14,18,.6); padding: 6px 14px; border-radius: 16px;
+  font-size: 12px; color: #9aa6b2;
+}
+#room-info b { color: #ffce45; letter-spacing: 2px; font-size: 13px; }
+#room-info button {
+  pointer-events: auto; cursor: pointer; padding: 3px 10px; font-size: 12px;
+  background: #1d2730; color: #cfd8e0; border: 1px solid #36424e; border-radius: 4px;
+}
+#room-info button:hover { background: #29343f; }
+
+/* 点击进入 */
+#click-block {
+  position: absolute; inset: 0; z-index: 30;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  background: rgba(4,6,8,.62); cursor: pointer;
+}
+.click-title { font-size: 30px; font-weight: 800; color: #f0f0f0; letter-spacing: 3px; text-shadow: 0 2px 8px #000; }
+.click-sub { font-size: 13px; color: #93a0ad; }
+
+/* 购买菜单 */
+#buymenu {
+  position: absolute; inset: 0; z-index: 40;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: rgba(5,8,10,.8);
+}
+.buy-head { font-size: 24px; font-weight: 800; color: #ffce45; margin-bottom: 18px; letter-spacing: 2px; }
+.buy-close { font-size: 12px; color: #7f8a95; font-weight: 400; }
+#buy-sections { display: flex; flex-direction: column; gap: 8px; max-height: 62vh; overflow-y: auto; padding: 4px; }
+.buy-sec { display: flex; align-items: center; gap: 8px; }
+.buy-sec-name { width: 76px; text-align: right; color: #9aa6b2; font-size: 14px; flex: 0 0 auto; }
+.buy-item {
+  min-width: 150px; padding: 8px 12px; text-align: center; cursor: pointer;
+  background: #161e25; border: 1px solid #2c3945; border-radius: 6px; font-size: 14px;
+}
+.buy-item:hover { background: #222d38; border-color: #ffce45; }
+.buy-item .bi-name { color: #e8e8e8; }
+.buy-item .bi-price { color: #ffce45; font-size: 12px; margin-left: 6px; }
+.buy-item .bi-key { display: inline-block; margin-right: 6px; color: #5b6772; font-size: 12px; }
+.buy-item.disabled { opacity: .38; cursor: not-allowed; }
+.buy-item.owned { border-color: #3f7a4f; background: #16261b; }
+.buy-foot { margin-top: 18px; font-size: 12px; color: #77838f; }
+
+/* 记分板 */
+#scoreboard {
+  position: absolute; inset: 0; z-index: 25;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: rgba(5,8,10,.78);
+}
+.sb-head { font-size: 22px; font-weight: 800; color: #dfe6ec; margin-bottom: 16px; }
+#sb-round { font-size: 13px; color: #8b96a3; margin-left: 10px; font-weight: 400; }
+#sb-table { width: 520px; background: #131a20; border: 1px solid #2c3945; border-radius: 8px; padding: 8px 0; }
+.sb-row { display: grid; grid-template-columns: 30px 1fr 60px 60px 60px; padding: 7px 20px; font-size: 14px; align-items: center; }
+.sb-row.t { color: #ffb347; }
+.sb-row.ct { color: #6db4f0; }
+.sb-row .sb-num { color: #5b6772; }
+.sb-row .sb-kd { text-align: center; color: #c8ced6; }
+.sb-row .sb-ping { text-align: right; color: #77838f; }
+.sb-row .sb-bot { font-size: 11px; color: #ffce45; margin-left: 6px; }
+.sb-row.me { background: rgba(255,206,69,.08); }
+
+/* 断开连接 */
+#connlost {
+  position: absolute; inset: 0; z-index: 60;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  background: rgba(5,8,10,.88);
+}
+.lost-title { font-size: 26px; font-weight: 800; color: #ff7a6b; letter-spacing: 2px; }
+.lost-sub { font-size: 14px; color: #9aa6b2; }
