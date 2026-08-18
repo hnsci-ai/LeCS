@@ -331,12 +331,12 @@ const HUD = (function () {
     }
   }
 
-  // 每秒更新一次的帧率显示（low = 已自动降画质）
-  function updateFps(fps, low) {
+  // 每秒更新一次的帧率显示（low = 低画质；manual = null 自动 / true/false 手动档）
+  function updateFps(fps, low, manual) {
     if (!el.fpsVal) return;
     el.fpsVal.textContent = fps;
     el.fpsMeter.classList.toggle('low', fps < 30);
-    el.fpsMode.textContent = low ? '· 自动低画质' : '';
+    el.fpsMode.textContent = manual !== null ? (low ? '· 低画质' : '· 高画质') : (low ? '· 自动低画质' : '');
   }
 
   return {

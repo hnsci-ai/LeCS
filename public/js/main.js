@@ -25,7 +25,8 @@ const Main = (function () {
     inventory: {},          // slot -> weaponId（本地乐观切枪用）
     slotBuf: 0,
     joinState: 'idle',
-    fpsAcc: 0, fpsN: 0, fpsHist: [], lowQuality: false  // 帧率统计与自动画质档
+    fpsAcc: 0, fpsN: 0, fpsHist: [], lowQuality: false,  // 帧率统计与自动画质档
+    refreshEst: 60, calibUntil: 0, calibDone: false, manualQuality: null  // 刷新率校准 / F6 手动画质
   };
 
   // ---------- 大厅 ----------
@@ -82,6 +83,7 @@ const Main = (function () {
 
   function send(obj) { if (S.ws && S.ws.readyState === 1) S.ws.send(JSON.stringify(obj)); }
   window.__lecsSend = send; // 调试/测试辅助
+  window.__lecsQuality = () => ({ low: S.lowQuality, manual: S.manualQuality, refreshEst: Math.round(S.refreshEst), calibDone: S.calibDone });
 
   function onMessage(m) {
     switch (m.t) {
@@ -155,6 +157,13 @@ const Main = (function () {
     HUD.setRoomCode(S.code);
     const canvas = document.getElementById('gl');
     Render.init(canvas);
+    // 画质校准：进游戏前 2 秒强制低画质，测出本机可达最高帧率（≈屏幕刷新率上限）。
+    // 之后自动降档按这个目标走：60Hz 屏照旧，120/144Hz 的好机器不会被压在 60 帧。
+    S.calibUntil = performance.now() + 2000;
+    S.calibDone = false;
+    S.manualQuality = null;
+    S.lowQuality = true;
+    Render.setQuality(true);
     VM.init(Render.getCamera());
     Audio.startWind();
     document.getElementById('click-block').addEventListener('click', () => attemptRelock(false));
@@ -564,21 +573,45 @@ const Main = (function () {
   function frame(now) {
     const dtReal = Math.min(0.1, (now - lastT) / 1000);
     lastT = now;
-    // 帧率统计（1 秒平均）+ 自动画质：持续低于 40 帧关阴影投影，恢复 55 帧以上再开
+    // 帧率统计（1 秒平均）+ 自动画质：
+    // 开场低画质校准出本机最高帧率（≈屏幕刷新率），之后长时间达不到该目标 60% 就降档。
+    // 渲染循环本身无 60 上限（requestAnimationFrame 跟随显示器刷新率，120/144Hz 屏自然跑更高）。
     S.fpsAcc += dtReal; S.fpsN++;
     if (S.fpsAcc >= 1) {
       const fps = S.fpsN / S.fpsAcc;
       S.fpsHist.push(fps);
-      if (S.fpsHist.length > 4) S.fpsHist.shift();
-      HUD.updateFps(Math.round(fps), S.lowQuality);
-      S.fpsAcc = 0; S.fpsN = 0;
-      if (!S.lowQuality && S.fpsHist.length >= 3 && S.fpsHist.every(v => v < 40)) {
-        S.lowQuality = true;
-        Render.setQuality(true);
-      } else if (S.lowQuality && S.fpsHist.length >= 4 && S.fpsHist.every(v => v > 55)) {
-        S.lowQuality = false;
-        Render.setQuality(false);
+      if (S.fpsHist.length > 8) S.fpsHist.shift();
+      const nowQ = performance.now();
+      if (S.manualQuality === null) {
+        if (nowQ < S.calibUntil) {
+          // 校准窗口内：低画质测上限
+          S.refreshEst = Math.max(S.refreshEst, fps);
+        } else if (!S.calibDone) {
+          S.calibDone = true;
+          S.refreshEst = Math.min(240, Math.max(60, S.refreshEst));
+          S.lowQuality = false;
+          Render.setQuality(false);
+          S.fpsHist.length = 0;
+        } else {
+          // 目标 = 屏幕刷新率：好机器目标 120/144，普通 60Hz 机器目标 60
+          const degTh = Math.max(40, S.refreshEst * 0.6);
+          if (!S.lowQuality && S.fpsHist.length >= 3 && S.fpsHist.slice(-3).every(v => v < degTh)) {
+            S.lowQuality = true;
+            Render.setQuality(true);
+            S.fpsHist.length = 0;
+            HUD.showMessage('帧率低于 ' + Math.round(degTh) + '，已自动降低画质（按 F6 恢复）', '#ffd98a');
+          }
+        }
       }
+      HUD.updateFps(Math.round(fps), S.lowQuality, S.manualQuality);
+      S.fpsAcc = 0; S.fpsN = 0;
+    }
+    // F6 手动切换画质档
+    if (Input.takeEdge('quality')) {
+      S.manualQuality = !S.lowQuality;
+      S.lowQuality = S.manualQuality;
+      Render.setQuality(S.manualQuality);
+      HUD.showMessage(S.manualQuality ? '已切换为低画质（关闭阴影，按 F6 切回）' : '已切换为高画质（开启阴影，按 F6 切回）', '#ffd98a');
     }
     const me = myEntry(S.lastSnap);
     // 后坐力/落地压头衰减

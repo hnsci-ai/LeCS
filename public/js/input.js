@@ -23,7 +23,8 @@ const Input = (function () {
     KeyB: 'buymenu',
     Tab: 'scoreboard',
     Digit1: 'slot1', Digit2: 'slot2', Digit3: 'slot3', Digit4: 'slot4', Digit5: 'slot5',
-    F3: 'addbot', F4: 'removebot'
+    F3: 'addbot', F4: 'removebot',
+    F6: 'quality'   // 手动切换画质档（高/低）
   };
 
   let fire = false;
@@ -49,6 +50,7 @@ const Input = (function () {
       if (act === 'scoreboard' && !keys.scoreboard) edges.scoreboardOn = true;
       if (act === 'addbot') edges.addbot = true;
       if (act === 'removebot') edges.removebot = true;
+      if (act === 'quality') edges.quality = true;
       keys[act] = true;
     }
   });
