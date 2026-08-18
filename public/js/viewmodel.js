@@ -196,13 +196,14 @@ const VM = (function () {
     }
     const b = build(id);
     group.add(b.root);
-    cur = { weapon: id, root: b.root, tip: b.tip, kick: 0, bobPhase: 0, reloadT: 0, switchT: 0 };
+    cur = { weapon: id, root: b.root, tip: b.tip, kick: 0, bobPhase: 0, reloadT: 0, switchT: 0, slash: 0 };
   }
 
   function setVisible(v) { if (group) group.visible = v; }
 
   function fire() {
     if (!cur) return;
+    if (cur.weapon === 'knife') { cur.slash = 1; return; } // 匕首：挥砍，无火光
     cur.kick = 1;
     // 枪口火光（星芒随机旋转/缩放 + 柔光）
     const sc = 0.17 + Math.random() * 0.09;
@@ -249,6 +250,17 @@ const VM = (function () {
     );
     group.rotation.set(reloadTilt, 0, cur.kick * 0.06);
 
+    // 匕首挥砍动画（斜劈弧线）
+    if (cur.slash > 0) {
+      cur.slash -= dt * 5.5;
+      const sw = Math.sin(Math.max(0, cur.slash) * Math.PI);
+      cur.root.rotation.z = -sw * 1.15;
+      cur.root.rotation.y = sw * 0.55;
+    } else {
+      cur.root.rotation.z = 0;
+      cur.root.rotation.y = 0;
+    }
+
     // 火光衰减
     if (muzzleStar.visible) {
       muzzleStar.material.opacity -= dt * 16;
@@ -273,5 +285,9 @@ const VM = (function () {
     return { x: _muzzleV.x, y: _muzzleV.y, z: _muzzleV.z };
   }
 
-  return { init, setWeapon, setVisible, fire, update, weaponId, getMuzzleWorld, _debugVisible: () => !!group && group.visible };
+  return {
+    init, setWeapon, setVisible, fire, update, weaponId, getMuzzleWorld,
+    _debugVisible: () => !!group && group.visible,
+    _debugMuzzleOn: () => !!muzzleStar && muzzleStar.visible
+  };
 })();

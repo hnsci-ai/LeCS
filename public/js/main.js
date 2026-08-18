@@ -214,7 +214,10 @@ const Main = (function () {
         const hx = sh[7], hy = sh[8], hz = sh[9], kind = sh[10];
         const d = S.sim ? Math.hypot(x - S.sim.x, z - S.sim.z) : 99;
         const own = d <= 2;
-        if (!own) {
+        if (!own && wid === 'knife') {
+          // 匕首攻击：只有嗖声，无曳光/无火光
+          Audio.knifeSwing(true);
+        } else if (!own) {
           Audio.gunshot(wid, true);
           // 3D 曳光轨迹：起点 → 服务器计算的真实命中点
           if (hx !== undefined && kind !== 0) {
@@ -225,7 +228,7 @@ const Main = (function () {
             const dz = -Math.cos(yaw) * Math.cos(pitch);
             Render.tracer({ x, y, z }, { x: x + dx * 28, y: y + dy * 28, z: z + dz * 28 });
           }
-          if (wid !== 'knife') Render.muzzleFlash(x, y, z, yaw, pitch);
+          Render.muzzleFlash(x, y, z, yaw, pitch);
           if (kind === 1 || kind === 2) Render.impact(hx, hy, hz, kind);
         } else if (hx !== undefined && (kind === 1 || kind === 2)) {
           // 自己的子弹：本地即时绘制曳光，服务器命中点补火花/血雾
@@ -330,7 +333,7 @@ const Main = (function () {
         Audio.scopeSound(S.scoped > 0);
       } else if (wid === 'knife' && performance.now() >= S.localNextFire) {
         S.localNextFire = performance.now() + 600;
-        Audio.gunshot('knife', false);
+        Audio.knifeSwing(false);
         VM.fire();
       }
     }
@@ -347,6 +350,7 @@ const Main = (function () {
         Audio.emptyClick(); // 空仓咔哒声，无枪声无曳光
       } else if (!reloading) {
         if (wid === 'hegrenade') Audio.throwSound();
+        else if (wid === 'knife') Audio.knifeSwing(false); // 匕首：挥砍声，无枪声
         else Audio.gunshot(wid, false);
         VM.fire();
         // 自己的曳光弹（即时绘制，无需等服务器）+ 抛壳

@@ -139,6 +139,11 @@ const Audio = (function () {
     burst({ freq: inOut ? 3200 : 2600, dur: 0.045, vol: 0.3, type: 'highpass' });
     burst({ freq: 900, dur: 0.05, vol: 0.15, type: 'lowpass' });
   }
+  function knifeSwing(distant) {
+    // 匕首挥砍嗖声
+    burst({ freq: 2600, dur: 0.09, vol: distant ? 0.12 : 0.32, type: 'bandpass' });
+    tone(1100, 0.08, distant ? 0.08 : 0.18, 'sine', 0, 3200);
+  }
   function flashSound() {
     // 闪光弹：高频耳鸣般的尖鸣
     tone(1800, 1.2, 0.35, 'sine', 0, 4200);
@@ -154,7 +159,7 @@ const Audio = (function () {
   return {
     ensure, resume, gunshot, footsteps, reload, hit, hurt, explosion,
     bombBeep, roundEnd, roundStart, plantSound, throwSound, bounceSound, buySound, denySound, emptyClick, scopeSound,
-    flashSound, smokeSound,
+    knifeSwing, flashSound, smokeSound,
     // 测试辅助
     _debugState: () => ({ created: !!ctx, state: ctx ? ctx.state : 'none', plays })
   };
