@@ -551,11 +551,98 @@
     }
   };
 
+  // ================= 地图五：cross（十字路口，32×32） =================
+  var crossDef = {
+    bound: 16,
+    rooms: [
+      { id: 'center', x1: -4, z1: -4, x2: 4, z2: 4, open: { n: [-4, 4], s: [-4, 4], w: [-4, 4], e: [-4, 4] } },
+      { id: 'north', x1: -4, z1: 4, x2: 4, z2: 16, open: { n: [-4, 4] } },
+      { id: 'south', x1: -4, z1: -16, x2: 4, z2: -4, open: { s: [-4, 4] } },
+      { id: 'west', x1: -16, z1: -4, x2: -4, z2: 4, open: { e: [-4, 4] } },
+      { id: 'east', x1: 4, z1: -4, x2: 16, z2: 4, open: { w: [-4, 4] } }
+    ],
+    crateDefs: [
+      [0, 0],                              // 中央箱
+      [-7, 0], [7, 0], [0, 7], [0, -7],    // 四臂中段
+      [-14, 0], [14, 0]                    // 西/东臂远端
+    ],
+    coverDefs: {
+      sandbag: [],
+      tall: [[-3, 0], [3, 0], [0, 3], [0, -3]]   // 中央广场四角高掩体
+    },
+    hostageSpots: [
+      { x: -10, z: 0 }, { x: 10, z: 0 }, { x: 0, z: 10 }, { x: 0, z: -10 }
+    ],
+    spawns: {
+      t: [
+        { x: -2, z: 13, yaw: 0 }, { x: 0, z: 13, yaw: 0 },
+        { x: 2, z: 13, yaw: 0 }, { x: -2, z: 11, yaw: 0.2 }, { x: 2, z: 11, yaw: -0.2 }
+      ],
+      ct: [
+        { x: -2, z: -13, yaw: Math.PI }, { x: 0, z: -13, yaw: Math.PI },
+        { x: 2, z: -13, yaw: Math.PI }, { x: -2, z: -11, yaw: Math.PI - 0.2 }, { x: 2, z: -11, yaw: Math.PI + 0.2 }
+      ]
+    },
+    buyZones: {
+      t: { x1: -4, z1: 4, x2: 4, z2: 16 },
+      ct: { x1: -4, z1: -16, x2: 4, z2: -4 }
+    },
+    sites: {
+      a: { rect: { x1: -16, z1: -4, x2: -4, z2: 4 }, plant: { x: -10, z: 0 }, radius: 4, letter: 'A' },
+      b: { rect: { x1: 4, z1: -4, x2: 16, z2: 4 }, plant: { x: 10, z: 0 }, radius: 4, letter: 'B' }
+    }
+  };
+
+  // ================= 地图六：lanes（双道突袭，40×40） =================
+  var lanesDef = {
+    bound: 20,
+    rooms: [
+      { id: 'tyard', x1: -20, z1: 12, x2: 20, z2: 20, open: { n: [-10, -4, 4, 10, -2, 2] } },
+      { id: 'ctyard', x1: -20, z1: -20, x2: 20, z2: -12, open: { s: [-10, -4, 4, 10, -2, 2] } },
+      { id: 'laneW', x1: -10, z1: -12, x2: -4, z2: 12, open: { n: [-10, -4], s: [-10, -4], e: [-12, 12] } },
+      { id: 'laneE', x1: 4, z1: -12, x2: 10, z2: 12, open: { n: [-10, -4], s: [-10, -4], w: [-12, 12] } },
+      { id: 'mid', x1: -4, z1: -12, x2: 4, z2: 12, open: { n: [-2, 2], s: [-2, 2], w: [-12, 12], e: [-12, 12] } }
+    ],
+    crateDefs: [
+      [0, 0],                             // 中路中央
+      [-7, 8], [-7, -6], [-7, 6],         // 左道
+      [7, 8], [7, -6], [7, 6],            // 右道
+      [-12, 16], [12, 16], [-14, -14], [14, -14] // 双方后院（避开出生点）
+    ],
+    coverDefs: {
+      sandbag: [[0, 8], [0, -8], [-7, 4], [-7, -4], [7, 4], [7, -4]],
+      tall: [[0, 5], [0, -5]]
+    },
+    hostageSpots: [
+      { x: -7, z: -8 }, { x: 7, z: 8 }, { x: 0, z: 11 }, { x: 0, z: -11 }
+    ],
+    spawns: {
+      t: [
+        { x: -14, z: 18, yaw: 0 }, { x: -8, z: 18, yaw: 0 },
+        { x: -2, z: 18, yaw: 0 }, { x: 4, z: 18, yaw: 0 }, { x: 10, z: 18, yaw: 0 }
+      ],
+      ct: [
+        { x: -14, z: -18, yaw: Math.PI }, { x: -8, z: -18, yaw: Math.PI },
+        { x: -2, z: -18, yaw: Math.PI }, { x: 4, z: -18, yaw: Math.PI }, { x: 10, z: -18, yaw: Math.PI }
+      ]
+    },
+    buyZones: {
+      t: { x1: -20, z1: 12, x2: 20, z2: 20 },
+      ct: { x1: -20, z1: -20, x2: 20, z2: -12 }
+    },
+    sites: {
+      a: { rect: { x1: -10, z1: -12, x2: -4, z2: 12 }, plant: { x: -7, z: 0 }, radius: 4, letter: 'A' },
+      b: { rect: { x1: 4, z1: -12, x2: 10, z2: 12 }, plant: { x: 7, z: 0 }, radius: 4, letter: 'B' }
+    }
+  };
+
   var MAPS = {
     dust: buildMap(dustDef),
     dust2: buildMap(dust2Def),
     arms: buildMap(armsDef),
-    test: buildMap(testDef)
+    test: buildMap(testDef),
+    cross: buildMap(crossDef),
+    lanes: buildMap(lanesDef)
   };
 
   return { MAPS: MAPS, MAPDATA: MAPS.dust };

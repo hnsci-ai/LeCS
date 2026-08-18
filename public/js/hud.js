@@ -322,7 +322,7 @@ const HUD = (function () {
   }
 
   function setRoomCode(code, map) {
-    const mapName = map === 'dust2' ? '沙漠二' : (map === 'arms' ? '军备竞技场' : (map === 'test' ? '测试靶场' : '仓库'));
+    const mapName = map === 'dust2' ? '沙漠二' : (map === 'arms' ? '军备竞技场' : (map === 'test' ? '测试靶场' : (map === 'cross' ? '十字路口' : (map === 'lanes' ? '双道突袭' : '仓库'))));
     el.roomCode.textContent = (code || '----') + (map ? ' · ' + mapName : '');
   }
 

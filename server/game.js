@@ -7,6 +7,13 @@ const WPN = require('../shared/weapons');
 const BotBrain = require('./bots');
 
 const W = WPN.W;
+// 每发子弹的枪口上跳（弧度，服务器权威：连续射击枪口持续爬升，停火后回落）
+const RECOIL_KICK = {
+  usp: 0.016, glock: 0.013, p228: 0.019, fiveseven: 0.016, deagle: 0.030, elites: 0.014,
+  mp5: 0.006, tmp: 0.006, mac10: 0.010, ump45: 0.010, p90: 0.008,
+  ak47: 0.010, m4a1: 0.008, galil: 0.010, famas: 0.008, sg552: 0.008, aug: 0.008, m249: 0.014,
+  scout: 0.030, awp: 0.050, g3sg1: 0.020, sg550: 0.020
+};
 let NEXT_ID = 1;
 
 function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
@@ -102,6 +109,7 @@ class Game {
       ackSeq: 0, latency: 0,
       planting: 0, plantX: 0, plantZ: 0, defusing: 0,
       respawnAt: 0, survived: false,
+      recoilPitch: 0, // 连射枪口爬升（弧度，服务器权威）
       history: [], // 位置历史（延迟补偿）
       diedAt: 0, spectateTarget: null
     };
@@ -282,6 +290,7 @@ class Game {
     const aliveTs = [];
     this.players.forEach(p => {
       p.history = [];
+      p.recoilPitch = 0;
       if (p.bot && p.brain) p.brain.reset();
       // 死亡玩家重置装备，幸存者保留并补满弹药
       if (!p.survived) {
@@ -642,6 +651,7 @@ class Game {
         if (p.alive) {
           if (p.bot && p.brain && this.mode !== 'test') p.brain.update(dt); // 测试模式 Bot 完全静止
           else this.applyLook(p);
+          if (p.recoilPitch > 0) p.recoilPitch = Math.max(0, p.recoilPitch - 0.03 * dt); // 停火缓慢回落（连发期间净爬升）
           MOV.step(p, p.in, dt, this.mapData.walls);
           p.in.jump = false;
           this.historyPush(p);
@@ -707,6 +717,7 @@ class Game {
       // 人质营救：按 E 带领人质
       if (inp.use && this.mode === 'hostage') this.tryLeadHostage(p);
       if (inp.slot) {
+        p.recoilPitch = 0; // 换枪重置后坐力
         const s = inp.slot;
         if (s === 4) {
           // 手雷：按 4 切换到手雷；连按在手雷间循环（高爆→闪光→烟雾）
@@ -788,6 +799,8 @@ class Game {
     w.mag--;
     p.nextFire = now + (1000 / def.rate);
     const hit = this.hitscan(p, w.id, def);
+    // 后坐力：开火后才爬升（第一发精准，连发越打越高，服务器权威）
+    p.recoilPitch = Math.min(0.3, p.recoilPitch + (RECOIL_KICK[w.id] || 0));
     // 曳光弹数据：[起点x,y,z, 武器, 阵营, yaw, pitch, 命中x,y,z, 命中类型 0空/1墙/2玩家, 受害者id]
     this.shots.push([
       +p.x.toFixed(2), +p.eye.toFixed(2), +p.z.toFixed(2),
@@ -797,9 +810,9 @@ class Game {
     ]);
   }
 
-  aimDir(p, spread) {
+  aimDir(p, spread, withRecoil) {
     const yaw = p.yaw + (Math.random() - 0.5) * 2 * spread;
-    const pitch = p.pitch + (Math.random() - 0.5) * 2 * spread;
+    const pitch = p.pitch + (withRecoil === false ? 0 : (p.recoilPitch || 0)) + (Math.random() - 0.5) * 2 * spread;
     return {
       x: -Math.sin(yaw) * Math.cos(pitch),
       y: Math.sin(pitch),
@@ -817,7 +830,7 @@ class Game {
       spread = def.scopeSpread !== undefined ? def.scopeSpread : 0.0004; // 开镜精度拉满
     }
     p.lastShot = Date.now();
-    const dir = this.aimDir(p, Math.max(0.001, spread));
+    const dir = this.aimDir(p, Math.max(0.001, spread), true); // 后坐力爬升作用于子弹
     const ox = p.x, oy = p.eye, oz = p.z;
     const RANGE = 200;
 
@@ -892,7 +905,7 @@ class Game {
     const dmg = alt ? W.knife.dmgAlt : W.knife.dmg;
     // 冷却不同：轻击快（rate 2.0 → 0.5 秒），重击慢（rateAlt 1.0 → 1 秒）
     p.nextFire = now + 1000 / (alt ? W.knife.rateAlt : W.knife.rate);
-    const dir = this.aimDir(p, 0.02);
+    const dir = this.aimDir(p, 0.02, false); // 刀不受后坐力
     let best = null, bestD = W.knife.range;
     this.players.forEach(v => {
       if (v === p || !v.alive) return;
@@ -1024,7 +1037,7 @@ class Game {
   throwNade(p) {
     const w = p.weapons[4];
     const wid = w ? w.id : 'hegrenade';
-    const dir = this.aimDir(p, 0);
+    const dir = this.aimDir(p, 0, false); // 手雷投掷不受后坐力
     const sp = 13;
     this.nades.push({
       id: NEXT_ID++, type: wid,
