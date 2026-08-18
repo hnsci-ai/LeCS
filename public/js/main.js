@@ -2,6 +2,12 @@
 'use strict';
 const Main = (function () {
   const C = GAMECONST;
+  const RECOIL = {
+    ak47: 0.007, m4a1: 0.005, mp5: 0.004, tmp: 0.004, mac10: 0.006, ump45: 0.006, p90: 0.005,
+    galil: 0.006, famas: 0.005, sg552: 0.005, aug: 0.005, m249: 0.008,
+    awp: 0.02, scout: 0.014, g3sg1: 0.01, sg550: 0.01,
+    usp: 0.008, glock: 0.006, deagle: 0.016, p228: 0.009, fiveseven: 0.007, elites: 0.006
+  };
   const S = {
     ws: null, myId: 0, code: '', mode: 'classic',
     snaps: [], lastSnap: null, roster: [],
@@ -12,6 +18,9 @@ const Main = (function () {
     wasReloading: false, wasAlive: false, hadFirstSnap: false,
     localNextFire: 0, prevFireHeld: false,
     scoped: 0,              // AWP 开镜档位（本地镜像，服务器权威）
+    recoilP: 0, recoilY: 0, // 射击后坐力（视角上跳）
+    landDip: 0,             // 落地镜头下压
+    fallTime: 0, wasAir: false,
     spectateId: 0,          // 观战目标 id
     inventory: {},          // slot -> weaponId（本地乐观切枪用）
     slotBuf: 0,
@@ -146,6 +155,7 @@ const Main = (function () {
     const canvas = document.getElementById('gl');
     Render.init(canvas);
     VM.init(Render.getCamera());
+    Audio.startWind();
     document.getElementById('click-block').addEventListener('click', () => attemptRelock(false));
     // 兜底：未锁定时点击画布也可重新锁定
     canvas.addEventListener('click', () => {
@@ -214,11 +224,13 @@ const Main = (function () {
         const hx = sh[7], hy = sh[8], hz = sh[9], kind = sh[10];
         const d = S.sim ? Math.hypot(x - S.sim.x, z - S.sim.z) : 99;
         const own = d <= 2;
+        const rel = S.sim ? Math.atan2(x - S.sim.x, z - S.sim.z) - S.sim.yaw : 0;
+        const pan = Math.sin(rel);
         if (!own && wid === 'knife') {
           // 匕首攻击：只有嗖声，无曳光/无火光
           Audio.knifeSwing(true);
         } else if (!own) {
-          Audio.gunshot(wid, true);
+          Audio.gunshot(wid, true, pan, d);
           // 3D 曳光轨迹：起点 → 服务器计算的真实命中点
           if (hx !== undefined && kind !== 0) {
             Render.tracer({ x, y, z }, { x: hx, y: hy, z: hz });
@@ -248,8 +260,24 @@ const Main = (function () {
     // 炸弹倒计时音
     if (snap.bomb && snap.bomb[0] === 'planted') Audio.bombBeep(snap.bomb[4]);
 
-    // 手雷渲染 + 烟雾弹烟团 + 人质
-    if (snap.nades) Render.updateNades(snap.nades);
+    // 手雷弹跳声（检测下落→上升的翻转）
+    if (snap.nades) {
+      const prevY = S.nadeY || [];
+      snap.nades.forEach((n, i) => {
+        const prev = prevY[i];
+        if (prev !== undefined) {
+          const vy = (n[1] - prev);
+          if (vy > 0.12 && (prev - (S.nadePrevY && S.nadePrevY[i] || prev)) < -0.12) {
+            const d = S.sim ? Math.hypot(n[0] - S.sim.x, n[2] - S.sim.z) : 10;
+            const rel2 = S.sim ? Math.atan2(n[0] - S.sim.x, n[2] - S.sim.z) - S.sim.yaw : 0;
+            Audio.nadeBounce(Math.sin(rel2), d);
+          }
+        }
+      });
+      S.nadePrevY = prevY;
+      S.nadeY = snap.nades.map(n => n[1]);
+      Render.updateNades(snap.nades);
+    }
     Render.updateSmokes(snap.smokes || []);
     Render.updateHostages(snap.hostages || []);
     Render.updateCrates(snap.crates || []);
@@ -303,8 +331,18 @@ const Main = (function () {
     const me = myEntry(S.lastSnap);
     if (!S.sim || !me || me[9] !== 1) return;
     const inp = Input.snapshot();
-    S.sim.yaw = Input.yaw();
-    S.sim.pitch = Input.pitch();
+    const pEff = Math.max(-1.55, Math.min(1.55, Input.pitch() + S.recoilP));
+    S.sim.yaw = Input.yaw() + S.recoilY;
+    S.sim.pitch = pEff;
+    S.viewPitch = pEff;
+    S.viewYaw = Input.yaw() + S.recoilY;
+    // 落地检测
+    if (!S.sim.onGround) { S.fallTime += C.DT; S.wasAir = true; }
+    else if (S.wasAir) {
+      S.wasAir = false;
+      if (S.fallTime > 0.22) { Audio.land(); S.landDip = 1; }
+      S.fallTime = 0;
+    }
     const movIn = {
       f: inp.f, b: inp.b, l: inp.l, r: inp.r,
       walk: inp.walk, crouch: inp.crouch, jump: inp.jump
@@ -355,7 +393,13 @@ const Main = (function () {
       } else if (!reloading) {
         if (wid === 'hegrenade') Audio.throwSound();
         else if (wid === 'knife') Audio.knifeSwing(false); // 匕首：挥砍声，无枪声
-        else Audio.gunshot(wid, false);
+        else {
+          Audio.gunshot(wid, false);
+          // 后坐力：枪口上跳（含轻微水平漂移）
+          const rk = RECOIL[wid] || 0.005;
+          S.recoilP = Math.min(0.09, S.recoilP + rk);
+          S.recoilY += (Math.random() - 0.5) * rk * 0.6;
+        }
         VM.fire();
         // 自己的曳光弹（即时绘制，无需等服务器）+ 抛壳
         if (wid !== 'knife' && wid !== 'hegrenade') {
@@ -515,6 +559,10 @@ const Main = (function () {
     const dtReal = Math.min(0.1, (now - lastT) / 1000);
     lastT = now;
     const me = myEntry(S.lastSnap);
+    // 后坐力/落地压头衰减
+    S.recoilP *= Math.max(0, 1 - dtReal * 7);
+    S.recoilY *= Math.max(0, 1 - dtReal * 7);
+    S.landDip *= Math.max(0, 1 - dtReal * 4);
 
     // 30Hz 模拟
     if (S.sim && me && me[9] === 1) {
@@ -589,9 +637,28 @@ const Main = (function () {
     });
     Render.renderFrame(view, dtReal);
 
-    // 脚步声
+    // 自己的脚步声
     if (S.sim && me && me[9] === 1) {
       Audio.footsteps(Math.hypot(S.sim.vx, S.sim.vz), S.sim.crouch);
+    }
+    // 他人脚步声（位移累计，约每 2.6 米一步，带方位与距离）
+    if (S.sim) {
+      S.stepAccum = S.stepAccum || new Map();
+      players.forEach(pp => {
+        if (pp.id === S.myId || !pp.alive) return;
+        const key = pp.id;
+        const st = S.stepAccum.get(key) || { x: pp.x, z: pp.z, acc: 0 };
+        const moved = Math.hypot(pp.x - st.x, pp.z - st.z);
+        st.x = pp.x; st.z = pp.z; st.acc += moved;
+        if (st.acc > 2.6) {
+          st.acc = 0;
+          const dx = pp.x - S.sim.x, dz = pp.z - S.sim.z;
+          const dd = Math.hypot(dx, dz);
+          const rr = Math.atan2(dx, dz) - S.sim.yaw;
+          Audio.footstepDistant(Math.sin(rr), dd);
+        }
+        S.stepAccum.set(key, st);
+      });
     }
 
     // HUD
@@ -657,7 +724,11 @@ const Main = (function () {
       const x = (S.prevSim ? S.prevSim.x : s.x) + (s.x - (S.prevSim ? S.prevSim.x : s.x)) * f;
       const y = (S.prevSim ? S.prevSim.y : s.y) + (s.y - (S.prevSim ? S.prevSim.y : s.y)) * f;
       const z = (S.prevSim ? S.prevSim.z : s.z) + (s.z - (S.prevSim ? S.prevSim.z : s.z)) * f;
-      return { camX: x, camY: y + s.eye, camZ: z, yaw: Input.yaw(), pitch: Input.pitch() };
+      return {
+        camX: x, camY: y + s.eye, camZ: z,
+        yaw: S.viewYaw !== undefined ? S.viewYaw : Input.yaw(),
+        pitch: (S.viewPitch !== undefined ? S.viewPitch : Input.pitch()) + S.landDip * 0.035
+      };
     }
     // 观战：跟随队友
     const players = interpolatePlayers();

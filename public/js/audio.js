@@ -41,7 +41,14 @@ const Audio = (function () {
     const t = ctx.currentTime;
     g.gain.setValueAtTime(opts.vol || 0.5, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + (opts.dur || 0.12));
-    src.connect(filt); filt.connect(g); g.connect(master);
+    src.connect(filt); filt.connect(g);
+    if (opts.pan !== undefined && ctx.createStereoPanner) {
+      const pn = ctx.createStereoPanner();
+      pn.pan.value = Math.max(-1, Math.min(1, opts.pan));
+      g.connect(pn); pn.connect(master);
+    } else {
+      g.connect(master);
+    }
     src.start(t);
     if (opts.playback) src.playbackRate.value = opts.playback;
   }
@@ -87,14 +94,40 @@ const Audio = (function () {
     sg550: { freq: 350, dur: 0.22, vol: 0.85 },
     m249: { freq: 300, dur: 0.13, vol: 0.9 }
   };
-  function gunshot(weapon, distant) {
+  function gunshot(weapon, distant, pan, dist) {
     if (!ctx) return;
     const g = GUN[weapon] || GUN.glock;
-    const vol = distant ? g.vol * 0.25 : g.vol;
+    let vol = distant ? g.vol * 0.25 : g.vol;
+    if (dist !== undefined && dist > 0) vol *= Math.max(0.04, 1 / (1 + dist * 0.12)); // 距离衰减
     const freq = distant ? g.freq * 0.6 : g.freq;
-    burst({ freq, dur: g.dur * (distant ? 1.4 : 1), vol, type: g.type });
-    // 低频“砰”
-    if (!distant || weapon === 'awp') burst({ freq: 150, dur: 0.12, vol: vol * 0.6, type: 'lowpass' });
+    burst({ freq, dur: g.dur * (distant ? 1.4 : 1), vol, type: g.type, pan });
+    if (!distant || weapon === 'awp') burst({ freq: 150, dur: 0.12, vol: vol * 0.6, type: 'lowpass', pan });
+  }
+
+  // 他人脚步声（按距离/方位）
+  function footstepDistant(pan, dist) {
+    if (!ctx) return;
+    const vol = 0.16 * Math.max(0.05, 1 / (1 + dist * 0.25));
+    burst({ freq: 240 + Math.random() * 100, dur: 0.05, vol, type: 'lowpass', pan });
+  }
+
+  function land() { burst({ freq: 130, dur: 0.12, vol: 0.28, type: 'lowpass' }); }
+  function shellTink() { burst({ freq: 2600, dur: 0.03, vol: 0.1, type: 'highpass' }); tone(1900, 0.02, 0.05, 'sine'); }
+  function nadeBounce(pan, dist) {
+    const vol = 0.2 * Math.max(0.05, 1 / (1 + dist * 0.2));
+    burst({ freq: 700, dur: 0.04, vol, type: 'highpass', pan });
+  }
+  let windSrc = null, windGain = null;
+  function startWind() {
+    if (!ctx || windSrc) return;
+    windSrc = ctx.createBufferSource();
+    windSrc.buffer = noiseBuffer(ctx.sampleRate * 3);
+    windSrc.loop = true;
+    const f = ctx.createBiquadFilter();
+    f.type = 'lowpass'; f.frequency.value = 320;
+    windGain = ctx.createGain(); windGain.gain.value = 0.045;
+    windSrc.connect(f); f.connect(windGain); windGain.connect(master);
+    windSrc.start();
   }
 
   function footsteps(speed, crouch) {
@@ -188,7 +221,7 @@ const Audio = (function () {
   return {
     ensure, resume, gunshot, footsteps, reload, hit, hurt, explosion,
     bombBeep, roundEnd, roundStart, plantSound, throwSound, bounceSound, buySound, denySound, emptyClick, scopeSound,
-    knifeSwing, flashSound, smokeSound, streakSound, rescueSound, lootSound,
+    knifeSwing, flashSound, smokeSound, streakSound, rescueSound, lootSound, footstepDistant, land, shellTink, nadeBounce, startWind,
     // 测试辅助
     _debugState: () => ({ created: !!ctx, state: ctx ? ctx.state : 'none', plays })
   };

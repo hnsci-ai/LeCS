@@ -140,6 +140,8 @@ const Render = (function () {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.1;
 
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x9ec8e2);
@@ -148,6 +150,38 @@ const Render = (function () {
     camera = new THREE.PerspectiveCamera(75, 1, 0.05, 400);
     camera.rotation.order = 'YXZ';
     scene.add(camera);
+
+    // 天空穹顶（渐变）与太阳光晕
+    const skyTex = new THREE.CanvasTexture(makeCanvas(512, 256, (g, w, h) => {
+      const grad = g.createLinearGradient(0, 0, 0, h);
+      grad.addColorStop(0, '#4f8fcf');
+      grad.addColorStop(0.45, '#8fc3e6');
+      grad.addColorStop(0.62, '#cfe0e8');
+      grad.addColorStop(1, '#e6d9ba');
+      g.fillStyle = grad;
+      g.fillRect(0, 0, w, h);
+    }));
+    skyTex.colorSpace = THREE.SRGBColorSpace;
+    const sky = new THREE.Mesh(
+      new THREE.SphereGeometry(210, 20, 14),
+      new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, fog: false, depthWrite: false })
+    );
+    sky.renderOrder = -10;
+    scene.add(sky);
+    const sunGlow = new THREE.CanvasTexture(makeCanvas(128, 128, (g, w, h) => {
+      const grad = g.createRadialGradient(w / 2, h / 2, 2, w / 2, h / 2, w / 2);
+      grad.addColorStop(0, 'rgba(255,252,235,1)');
+      grad.addColorStop(0.25, 'rgba(255,240,190,0.85)');
+      grad.addColorStop(0.6, 'rgba(255,220,150,0.25)');
+      grad.addColorStop(1, 'rgba(255,220,150,0)');
+      g.fillStyle = grad;
+      g.fillRect(0, 0, w, h);
+    }));
+    sunGlow.colorSpace = THREE.SRGBColorSpace;
+    const sunSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: sunGlow, transparent: true, depthWrite: false, fog: false }));
+    sunSprite.position.set(120, 140, -90);
+    sunSprite.scale.set(60, 60, 1);
+    scene.add(sunSprite);
 
     // 灯光
     const hemi = new THREE.HemisphereLight(0xcfe4f2, 0x8d7c5e, 0.85);
@@ -249,6 +283,19 @@ const Render = (function () {
     addCoverMesh(bags, new THREE.BoxGeometry(1, 1, 1), bagMat);
     addCoverMesh(blocks, new THREE.BoxGeometry(1, 1, 1), blockMat);
     addCoverMesh(barrels, new THREE.CylinderGeometry(0.5, 0.5, 1, 10), barrelMat);
+
+    // 墙根环境阴影（视觉接地）
+    const aoBoxes = MAPDATA.walls.filter(w => w.y1 < 0.01 && !w.cover);
+    const aoMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.22, depthWrite: false });
+    const aoMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), aoMat, aoBoxes.length);
+    aoBoxes.forEach((w, i) => {
+      const dx = w.x2 - w.x1, dz = w.z2 - w.z1;
+      m4.makeScale(dx + 0.5, 0.16, dz + 0.5);
+      m4.setPosition((w.x1 + w.x2) / 2, 0.09, (w.z1 + w.z2) / 2);
+      aoMesh.setMatrixAt(i, m4);
+    });
+    aoMesh.renderOrder = 1;
+    scene.add(aoMesh);
 
     // 埋包点地标
     const decA = siteTexture('A', '#d24a2b');
@@ -752,6 +799,12 @@ const Render = (function () {
         g.userData.legR.rotation.x = -swing;
         g.userData.armL.rotation.x = -swing * 0.4;
         g.userData.armR.rotation.x = swing * 0.4;
+        // 跑动尘土
+        m.dustT = (m.dustT || 0) - 1;
+        if (sp > 3.3 && m.dustT <= 0) {
+          m.dustT = 0.16;
+          spawnBurst(p.x, p.y + 0.12, p.z, { count: 4, color: 0xc9b489, size: 0.05, speed: 0.8, life: 0.45, gravity: 0.7, upBias: 1.1 });
+        }
       } else {
         if (m.wasAlive) {
           // 死亡：布娃娃尸体（无血雾，几秒后沉没并变为战利品箱）

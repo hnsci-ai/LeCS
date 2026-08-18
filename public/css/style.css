@@ -60,6 +60,10 @@ input, select, button { font-family: inherit; }
 /* ============ 游戏画布 ============ */
 #game { position: fixed; inset: 0; }
 #gl { width: 100%; height: 100%; display: block; }
+#vignette {
+  position: fixed; inset: 0; pointer-events: none; z-index: 9;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.28) 100%);
+}
 
 /* ============ HUD 通用 ============ */
 #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }

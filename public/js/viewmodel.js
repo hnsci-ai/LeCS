@@ -301,6 +301,61 @@ const VM = (function () {
     group.add(muzzleGlow);
     muzzleLight = new THREE.PointLight(0xffc060, 0, 8, 2);
     group.add(muzzleLight);
+    initMuzzleSmoke();
+  }
+
+  const GLOVE = new THREE.MeshLambertMaterial({ color: 0x30343c });
+  const SLEEVE = new THREE.MeshLambertMaterial({ color: 0x4a5560 });
+
+  // 双手/手臂模型（真实感：枪不再悬浮）
+  function addHands(root, id) {
+    const def = WEAPONS.W[id];
+    const hand = () => {
+      const h = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.055, 0.105), GLOVE);
+      h.castShadow = false;
+      return h;
+    };
+    const arm = (w, h, d, x, y, z, rx) => {
+      const a = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), SLEEVE);
+      a.position.set(x, y, z);
+      a.rotation.x = rx || 0;
+      a.castShadow = false;
+      root.add(a);
+      return a;
+    };
+    if (def && def.slot === 1) {
+      // 步枪/狙击/机枪：右手握把 + 左手护木 + 小臂
+      const rh = hand(); rh.position.set(0.015, -0.06, -0.02); root.add(rh);
+      arm(0.055, 0.16, 0.06, 0.05, -0.13, 0.06, 0.35);
+      const lh = hand(); lh.position.set(0.0, 0.005, -0.2); root.add(lh);
+      arm(0.055, 0.16, 0.06, -0.02, -0.12, -0.06, -0.55);
+    } else if (def && def.slot === 2) {
+      // 手枪：双手交叠
+      const rh = hand(); rh.position.set(0.0, -0.05, 0.0); root.add(rh);
+      arm(0.05, 0.15, 0.06, 0.03, -0.12, 0.1, 0.3);
+      const lh = hand(); lh.position.set(-0.005, -0.095, 0.02); lh.rotation.z = 0.15; root.add(lh);
+    } else if (id === 'knife') {
+      const rh = hand(); rh.position.set(0.0, -0.03, 0.0); root.add(rh);
+      arm(0.05, 0.15, 0.06, 0.03, -0.1, 0.08, 0.3);
+    } else if (id === 'hegrenade' || id === 'flashbang' || id === 'smokegrenade') {
+      const rh = hand(); rh.position.set(0.0, -0.02, 0.0); root.add(rh);
+      arm(0.05, 0.15, 0.06, 0.03, -0.1, 0.08, 0.3);
+    }
+  }
+
+  // 枪口硝烟（小灰烟团）
+  const smokePuffs = [];
+  function initMuzzleSmoke() {
+    const tex = new THREE.CanvasTexture(flashTexture(true));
+    tex.colorSpace = THREE.SRGBColorSpace;
+    for (let i = 0; i < 3; i++) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: tex, color: 0x9a938a, transparent: true, opacity: 0, depthWrite: false
+      }));
+      sp.visible = false;
+      group.add(sp);
+      smokePuffs.push({ sp, life: 0 });
+    }
   }
 
   function setWeapon(id) {
@@ -310,6 +365,7 @@ const VM = (function () {
       cur = null;
     }
     const b = build(id);
+    addHands(b.root, id);
     group.add(b.root);
     cur = { weapon: id, root: b.root, tip: b.tip, kick: 0, bobPhase: 0, reloadT: 0, switchT: 0, slash: 0 };
   }
@@ -334,6 +390,15 @@ const VM = (function () {
     muzzleGlow.scale.set(gc, gc, 1);
     muzzleGlow.position.set(cur.tip.x, cur.tip.y, cur.tip.z);
     muzzleLight.intensity = 3.2;
+    // 枪口硝烟
+    const p = smokePuffs.find(q => q.life <= 0) || smokePuffs[0];
+    p.sp.visible = true;
+    p.life = 0.5;
+    p.sp.position.set(cur.tip.x, cur.tip.y, cur.tip.z + 0.02);
+    const psc = 0.09 + Math.random() * 0.05;
+    p.sp.scale.set(psc, psc, 1);
+    p.sp.material.opacity = 0.32;
+    p.sp.material.rotation = Math.random() * Math.PI * 2;
   }
 
   function update(dt, st) {
@@ -374,6 +439,18 @@ const VM = (function () {
     } else {
       cur.root.rotation.z = 0;
       cur.root.rotation.y = 0;
+    }
+
+    // 硝烟漂移消散
+    for (const p of smokePuffs) {
+      if (p.life > 0) {
+        p.life -= dt;
+        p.sp.position.y += dt * 0.25;
+        p.sp.position.z += dt * 0.15;
+        p.sp.scale.multiplyScalar(1 + dt * 1.2);
+        p.sp.material.opacity = Math.max(0, p.life / 0.5) * 0.32;
+        if (p.life <= 0) p.sp.visible = false;
+      }
     }
 
     // 火光衰减
