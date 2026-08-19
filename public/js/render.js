@@ -26,11 +26,11 @@ const Render = (function () {
   }
 
   function sandTexture() {
-    const c = makeCanvas(512, 512, (g, w, h) => {
+    const c = makeCanvas(1024, 1024, (g, w, h) => {
       g.fillStyle = '#c8b184'; g.fillRect(0, 0, w, h);
       // 大尺度沙地色斑（mottling）
-      for (let i = 0; i < 90; i++) {
-        const px = Math.random() * w, py = Math.random() * h, pr = 18 + Math.random() * 46;
+      for (let i = 0; i < 220; i++) {
+        const px = Math.random() * w, py = Math.random() * h, pr = 18 + Math.random() * 60;
         const v = 120 + Math.random() * 80 | 0;
         const gr = g.createRadialGradient(px, py, pr * 0.2, px, py, pr);
         gr.addColorStop(0, `rgba(${v},${v * 0.9 | 0},${v * 0.62 | 0},${0.05 + Math.random() * 0.09})`);
@@ -39,12 +39,12 @@ const Render = (function () {
         g.beginPath(); g.arc(px, py, pr, 0, Math.PI * 2); g.fill();
       }
       // 细砂粒
-      for (let i = 0; i < 9000; i++) {
+      for (let i = 0; i < 36000; i++) {
         const v = 120 + Math.random() * 80 | 0;
         g.fillStyle = `rgba(${v},${v * 0.88 | 0},${v * 0.62 | 0},${0.25 + Math.random() * 0.3})`;
-        g.fillRect(Math.random() * w, Math.random() * h, 1.5, 1.5);
+        g.fillRect(Math.random() * w, Math.random() * h, 1.4, 1.4);
       }
-      for (let i = 0; i < 140; i++) {
+      for (let i = 0; i < 560; i++) {
         g.fillStyle = 'rgba(90,70,40,0.25)';
         g.fillRect(Math.random() * w, Math.random() * h, 2 + Math.random() * 4, 1.5);
       }
@@ -219,6 +219,7 @@ const Render = (function () {
   // ---------- 初始化 ----------
   function init(canvas) {
     renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+    renderer.info.autoReset = false; // 后期管线：手动 reset，draw call 统计含全屏合成
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // 高画质：高 DPI 屏 2x 渲染，画面更锐
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap; // 软阴影：边缘柔和
@@ -297,6 +298,7 @@ const Render = (function () {
     buildMap();
     buildPools();
     initSmoke();
+    initPost();
     Ragdoll.init(scene);
     window.addEventListener('resize', onResize);
     onResize();
@@ -875,6 +877,139 @@ const Render = (function () {
     }
   }
 
+  // ---------- 后期管线：SSAO（环境光遮蔽）+ FXAA（抗锯齿） ----------
+  // 场景先渲染到带深度纹理的 RT，再用全屏 ShaderMaterial 合成：
+  // 深度重建视空间位置 → dFdx/dFdy 求法线 → 10 向采样 SSAO → FXAA 去锯齿 → 输出
+  let postRT = null, postScene = null, postMat = null;
+  const _postSize = new THREE.Vector2();
+  function initPost() {
+    renderer.getDrawingBufferSize(_postSize);
+    postRT = new THREE.WebGLRenderTarget(_postSize.x, _postSize.y, {
+      depthBuffer: true,
+      depthTexture: new THREE.DepthTexture(_postSize.x, _postSize.y)
+    });
+    postMat = new THREE.ShaderMaterial({
+      uniforms: {
+        tDiffuse: { value: postRT.texture },
+        tDepth: { value: postRT.depthTexture },
+        uResolution: { value: new THREE.Vector2(_postSize.x, _postSize.y) },
+        uProjInv: { value: new THREE.Matrix4() },
+        uAORadius: { value: 0.016 },   // UV 半径（≈20px@1280）
+        uAOIntensity: { value: 1.1 },  // 遮蔽强度（低=自然）
+        uAOBias: { value: 0.03 },      // 深度偏移，抑制自遮蔽
+        uL2S: { value: 1 }             // 三 r160 渲染到 RT 是线性值，输出前转 sRGB
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = vec4(position.xy, 0.0, 1.0);
+        }
+      `,
+      fragmentShader: `
+        precision highp float;
+        varying vec2 vUv;
+        uniform sampler2D tDiffuse;
+        uniform sampler2D tDepth;
+        uniform vec2 uResolution;
+        uniform mat4 uProjInv;
+        uniform float uAORadius;
+        uniform float uAOIntensity;
+        uniform float uAOBias;
+        uniform float uL2S; // 1 = RT 为线性，输出前转 sRGB
+
+        vec3 linearToSrgb(vec3 c) {
+          vec3 lo = c * 12.92;
+          vec3 hi = 1.055 * pow(max(c, vec3(0.0)), vec3(1.0 / 2.4)) - 0.055;
+          return mix(hi, lo, lessThanEqual(c, vec3(0.0031308)));
+        }
+
+        float hash2(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+
+        vec3 viewPosFromDepth(vec2 uv) {
+          float z = texture2D(tDepth, uv).x;
+          vec4 p = uProjInv * vec4(uv * 2.0 - 1.0, z * 2.0 - 1.0, 1.0);
+          return p.xyz / p.w;
+        }
+
+        const vec2 KERNEL[10] = vec2[10](
+          vec2( 0.13,  0.46), vec2(-0.33, -0.28), vec2( 0.44, -0.08), vec2(-0.18,  0.54),
+          vec2( 0.07, -0.66), vec2(-0.56, -0.22), vec2( 0.60,  0.29), vec2(-0.63,  0.35),
+          vec2( 0.28,  0.74), vec2(-0.83,  0.06)
+        );
+
+        float calcAO(vec2 uv, vec3 pos, vec3 nrm) {
+          float a = hash2(uv) * 6.28318;
+          mat2 rot = mat2(cos(a), sin(a), -sin(a), cos(a));
+          float occ = 0.0;
+          for (int i = 0; i < 10; i++) {
+            vec2 dir = rot * KERNEL[i] * uAORadius;
+            vec3 tpos = viewPosFromDepth(uv + dir);
+            vec3 diff = tpos - pos;
+            float dist2 = dot(diff, diff);
+            float v = max(0.0, dot(nrm, diff) - uAOBias) / (1.0 + dist2 * 0.12);
+            occ += v;
+          }
+          return clamp(1.0 - occ * (uAOIntensity / 10.0), 0.0, 1.0);
+        }
+
+        vec3 fxaa(sampler2D tex, vec2 uv, vec2 rcp) {
+          vec3 rgbNW = texture2D(tex, uv + vec2(-1.0, -1.0) * rcp).rgb;
+          vec3 rgbNE = texture2D(tex, uv + vec2( 1.0, -1.0) * rcp).rgb;
+          vec3 rgbSW = texture2D(tex, uv + vec2(-1.0,  1.0) * rcp).rgb;
+          vec3 rgbSE = texture2D(tex, uv + vec2( 1.0,  1.0) * rcp).rgb;
+          vec3 rgbM  = texture2D(tex, uv).rgb;
+          vec3 w = vec3(0.299, 0.587, 0.114);
+          float lNW = dot(rgbNW, w), lNE = dot(rgbNE, w);
+          float lSW = dot(rgbSW, w), lSE = dot(rgbSE, w), lM = dot(rgbM, w);
+          float lMin = min(lM, min(min(lNW, lNE), min(lSW, lSE)));
+          float lMax = max(lM, max(max(lNW, lNE), max(lSW, lSE)));
+          vec2 dir = vec2(-((lNW + lNE) - (lSW + lSE)), ((lNW + lSW) - (lNE + lSE)));
+          float dirReduce = max((lNW + lNE + lSW + lSE) * 0.03125, 1e-4);
+          float rcpDirMin = 1.0 / (min(abs(dir.x), abs(dir.y)) + dirReduce);
+          dir = clamp(dir * rcpDirMin, vec2(-8.0), vec2(8.0)) * rcp;
+          vec3 rgbA = 0.5 * (texture2D(tex, uv + dir * (1.0 / 3.0 - 0.5)).rgb
+                           + texture2D(tex, uv + dir * (2.0 / 3.0 - 0.5)).rgb);
+          vec3 rgbB = rgbA * 0.5 + 0.25 * (texture2D(tex, uv + dir * -0.5).rgb
+                                         + texture2D(tex, uv + dir * 0.5).rgb);
+          float lB = dot(rgbB, w);
+          return ((lB < lMin) || (lB > lMax)) ? rgbA : rgbB;
+        }
+
+        void main() {
+          vec3 color = texture2D(tDiffuse, vUv).rgb;
+          color = fxaa(tDiffuse, vUv, 1.0 / uResolution);
+          float z = texture2D(tDepth, vUv).x;
+          float ao = 1.0;
+          if (z < 0.999) {
+            vec3 pos = viewPosFromDepth(vUv);
+            // 深度梯度叉积得到的法线指向背离相机方向，取反 → 朝向相机
+            vec3 nrm = -normalize(cross(dFdx(pos), dFdy(pos)) + vec3(1e-5));
+            ao = calcAO(vUv, pos, nrm);
+          }
+          color *= ao;
+          color = mix(color, linearToSrgb(color), uL2S);
+          gl_FragColor = vec4(color, 1.0);
+        }
+      `,
+      depthTest: false,
+      depthWrite: false
+    });
+    postMat.extensions = { derivatives: true };
+    postScene = new THREE.Scene();
+    const postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), postMat);
+    quad.frustumCulled = false;
+    postScene.add(quad);
+    postScene.userData.cam = postCam;
+  }
+  function resizePost() {
+    if (!postRT) return;
+    renderer.getDrawingBufferSize(_postSize);
+    postRT.setSize(_postSize.x, _postSize.y);
+    postMat.uniforms.uResolution.value.set(_postSize.x, _postSize.y);
+  }
+
   function buildPools() {
     // 曳光弹：3D 圆柱（起点→终点，加法混合发光）
     for (let i = 0; i < 24; i++) {
@@ -999,6 +1134,7 @@ const Render = (function () {
     renderer.setSize(w, h);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    resizePost();
   }
 
   // ---------- 画质档位（自动降档：低档关闭阴影投影 + 像素比降到 1） ----------
@@ -1691,7 +1827,17 @@ const Render = (function () {
     if (bombGroup && bombGroup.visible && bombPlanted) {
       bombLed.visible = (performance.now() % 900) < 450;
     } else if (bombLed) bombLed.visible = false;
-    renderer.render(scene, camera);
+    // 渲染：高画质走后期管线（场景→RT→SSAO+FXAA 合成），低画质直接输出
+    if (postRT && !lowQuality) {
+      renderer.info.reset();
+      renderer.setRenderTarget(postRT);
+      renderer.render(scene, camera);
+      renderer.setRenderTarget(null);
+      postMat.uniforms.uProjInv.value.copy(camera.projectionMatrixInverse);
+      renderer.render(postScene, postScene.userData.cam);
+    } else {
+      renderer.render(scene, camera);
+    }
   }
 
   // 受击踉跄（他人命中时调用）
@@ -1721,6 +1867,8 @@ const Render = (function () {
     _debugSmokeSpheres: () => smokeWallPool.filter(m => m.visible).length,
     _debugBomb: () => ({ visible: !!(bombGroup && bombGroup.visible), planted: bombPlanted }),
     _debugBombLed: () => !!(bombLed && bombLed.visible),
+    _debugPost: () => ({ on: !!postRT, active: !!(postRT && !lowQuality) }),
+    _debugSetL2S: (v) => { if (postMat) postMat.uniforms.uL2S.value = v ? 1 : 0; return v; },
     // 玩家头部结构诊断（守护"头必须挂在人物组里"，曾漏 add 导致无头）
     _debugPlayerHeads: () => {
       const out = [];
