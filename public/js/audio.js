@@ -162,6 +162,8 @@ const Audio = (function () {
   }
 
   function hurt() { burst({ freq: 220, dur: 0.12, vol: 0.4, type: 'lowpass' }); }
+  function dogBark() { tone(480, 0.06, 0.32, 'sawtooth', 0, 320); tone(360, 0.08, 0.3, 'sawtooth', 0.09, 240); }
+  function dogYelp() { tone(1500, 0.14, 0.3, 'sine', 0, 500); }
 
   function explosion() {
     if (!ctx) return;
@@ -243,6 +245,7 @@ const Audio = (function () {
     ensure, resume, gunshot, footsteps, reload, hit, hurt, explosion,
     bombBeep, roundEnd, roundStart, plantSound, throwSound, bounceSound, buySound, denySound, emptyClick, scopeSound,
     knifeSwing, knifeHit, flashSound, smokeSound, streakSound, rescueSound, lootSound, footstepDistant, land, shellTink, nadeBounce, startWind,
+    dogBark, dogYelp,
     // 测试辅助
     _debugState: () => ({ created: !!ctx, state: ctx ? ctx.state : 'none', plays })
   };

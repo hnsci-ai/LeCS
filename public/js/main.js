@@ -432,6 +432,7 @@ const Main = (function () {
       Render.updateNades(snap.nades);
     }
     Render.updateSmokes(snap.smokes || []);
+    Render.updateDogs(snap.dogs || []);
     Render.updateHostages(snap.hostages || []);
     Render.updateCrates(snap.crates || []);
     Render.updateBomb(snap.bomb || null);
@@ -621,6 +622,18 @@ const Main = (function () {
         // 油桶：中弹火花+金属声；打爆 → 爆炸特效+焦黑残骸
         if (ev.event === 'hit') { Render.impact(ev.x, ev.y, ev.z, 1); Audio.shellTink(); }
         if (ev.event === 'explode') { Audio.explosion(); Render.explosion(ev.x, ev.y + 0.2, ev.z); Render.barrelDestroyed(ev.id); }
+        break;
+      case 'dog':
+        // 哈基狗：撕咬（主人视角狗叫）；咬到自己 → 减速提示；狗受伤/死亡 → 哀嚎
+        if (ev.event === 'bite') {
+          if (ev.dogId !== S.myId) Audio.dogBark(); // 敌人的狗在咬人
+          if (ev.victimId === S.myId) {
+            Audio.dogBark();
+            if (ev.slow) HUD.showMessage('被哈基狗撕咬，移动减速！', '#ff7a6b');
+          }
+        }
+        if (ev.event === 'hurt') { Audio.dogYelp(); Render.impact(ev.x, ev.y, ev.z, 1); }
+        if (ev.event === 'die') Audio.dogYelp();
         break;
       case 'nade':
         if (ev.event === 'explode') {
@@ -911,6 +924,7 @@ const Main = (function () {
       phase: snap ? snap.phase : 'live',
       mode: snap ? snap.mode : S.mode,
       bomb: snap ? snap.bomb : null,
+      dogHp: (snap && snap.dogs) ? (() => { const dd = snap.dogs.find(q => q[0] === S.myId); return dd ? dd[5] : 0; })() : 0,
       hostages: snap ? snap.hostages : null,
       rescued: snap ? snap.rescued : 0,
       armsLadder: snap ? snap.armsLadder : null

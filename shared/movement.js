@@ -27,7 +27,9 @@
     var wl = Math.sqrt(wx * wx + wz * wz);
     if (wl > 1e-6) { wx /= wl; wz /= wl; }
 
-    var maxSpeed = input.walk ? C.WALK_SPEED : (input.crouch ? C.CROUCH_SPEED : C.RUN_SPEED);
+    // 哈基狗撕咬减速：slowUntil 内移动速度降 40%
+    var slowMul = (p.slowUntil && p.slowUntil > Date.now()) ? 0.6 : 1;
+    var maxSpeed = (input.walk ? C.WALK_SPEED : (input.crouch ? C.CROUCH_SPEED : C.RUN_SPEED)) * slowMul;
 
     if (p.onGround) {
       var accel = wl > 0 ? C.GROUND_ACCEL : C.STOP_ACCEL;

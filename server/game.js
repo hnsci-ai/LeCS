@@ -249,6 +249,9 @@ class Game {
       // 测试辅助：撤销安放（隐藏模型）
       this.bomb.state = C.BOMB_HIDDEN;
       this.bomb.carrier = null;
+    } else if (msg.cmd === 'smokeclear') {
+      // 测试辅助：清除场上所有烟雾
+      this.smokes = [];
     } else if (msg.cmd === 'smoke') {
       // 测试辅助：直接生成一团满尺寸烟雾（渲染验证用）
       this.smokes.push({
@@ -311,6 +314,7 @@ class Game {
     const aliveTs = [];
     this.players.forEach(p => {
       p.history = [];
+      p.dog = null; // 哈基狗每回合重置（阵亡随主人）
       if (p.bot && p.brain) p.brain.reset();
       // 死亡玩家重置装备，幸存者保留并补满弹药
       if (!p.survived) {
@@ -605,6 +609,8 @@ class Game {
       if (id === 'helmet' && p.helmet) return { ok: false, reason: '已有头盔' };
       if (id === 'helmet' && p.armor <= 0) return { ok: false, reason: '需先购买防弹衣' };
       if (id === 'defuse' && p.defuseKit) return { ok: false, reason: '已有拆弹器' };
+      if (id === 'hachiko' && p.dog && p.dog.alive) return { ok: false, reason: '本回合已有哈基狗' };
+      if (id === 'hachiko' && !p.alive) return { ok: false, reason: '已阵亡' };
       cost = g.price;
     } else {
       return { ok: false, reason: '未知物品' };
@@ -615,6 +621,13 @@ class Game {
   }
 
   applyBuy(p, id) {
+    if (id === 'hachiko') {
+      // 哈基狗：生成在主人身边（死斗免费，其余按价扣款）
+      p.dog = { hp: 40, alive: true, x: p.x, y: 0, z: p.z, yaw: p.yaw, state: 'follow', target: null, biteCd: 0, path: [], pathT: 0 };
+      p.money = clamp(p.money - (this.mode === 'dm' ? 0 : WPN.gear.hachiko.price), 0, C.MAX_MONEY);
+      this.emitEvent({ type: 'dog', event: 'spawn', dogId: p.id, x: p.x, z: p.z, team: p.team });
+      return;
+    }
     if (this.mode === 'dm') { // 死斗免费补满
       this.giveDMLoadout(p); return;
     }
@@ -690,6 +703,7 @@ class Game {
       this.tickBomb(dt);
       this.tickNades(dt);
       this.tickSmokes(dt);
+      this.tickDogs(dt); // 哈基狗：跟随/索敌/撕咬
       this.tickHostages(dt);
       // 战利品箱 30 秒后过期消失（避免整回合残留）
       if (this.crates.length) {
@@ -709,6 +723,7 @@ class Game {
       });
       this.tickNades(dt);
       this.tickSmokes(dt);
+      this.tickDogs(dt);
       this.processActions();
     }
 
@@ -871,13 +886,35 @@ class Game {
       const t = this.mapData.segBox(ox, oy, oz, dir.x, dir.y, dir.z, b.box);
       if (t >= 0 && t <= RANGE) hits.push({ barrel: i, dist: t });
     });
+    // 哈基狗（敌人的狗可被枪杀；打不到自己的狗）
+    this.players.forEach(v => {
+      if (v === p || !v.dog || !v.dog.alive || !v.alive) return;
+      const d = v.dog;
+      const t = this.mapData.segBox(ox, oy, oz, dir.x, dir.y, dir.z, {
+        x1: d.x - 0.22, y1: 0, z1: d.z - 0.22, x2: d.x + 0.22, y2: 0.55, z2: d.z + 0.22
+      });
+      if (t >= 0 && t <= RANGE) hits.push({ dogOwner: v.id, dist: t });
+    });
     hits.sort((a, b) => a.dist - b.dist);
-
     let result = null;
     for (const h of hits) {
       if (h.barrel !== undefined) {
         // 命中油桶：子弹被桶挡下（打不到后面的人）
         this.damageBarrel(h.barrel, def.dmg, p);
+        result = { x: ox + dir.x * h.dist, y: oy + dir.y * h.dist, z: oz + dir.z * h.dist, kind: 1 };
+        break;
+      }
+      if (h.dogOwner !== undefined) {
+        // 命中哈基狗：子弹被狗挡下（打不到后面的人）
+        const dv = this.players.get(h.dogOwner);
+        if (dv && dv.dog) {
+          dv.dog.hp -= def.dmg;
+          this.emitEvent({ type: 'dog', event: 'hurt', dogId: h.dogOwner, x: dv.dog.x, y: 0.3, z: dv.dog.z });
+          if (dv.dog.hp <= 0) {
+            dv.dog.alive = false;
+            this.emitEvent({ type: 'dog', event: 'die', dogId: h.dogOwner, killerId: p.id });
+          }
+        }
         result = { x: ox + dir.x * h.dist, y: oy + dir.y * h.dist, z: oz + dir.z * h.dist, kind: 1 };
         break;
       }
@@ -902,17 +939,36 @@ class Game {
       break; // 子弹只命中一人
     }
     if (!result) {
-      // 未命中任何目标：找最近的油桶 / 墙面 / 射程终点
+      // 未命中任何目标：找最近的油桶/哈基狗/墙面/射程终点
       const rc = this.mapData.raycast(ox, oy, oz, dir.x, dir.y, dir.z, 60, 0.02);
       let hitDist = rc.blocked ? rc.dist : 60;
-      let barrelHit = -1;
+      let barrelHit = -1, dogOwnerHit = -1;
       this.barrels.forEach((b, i) => {
         if (b.destroyed) return;
         const t = this.mapData.segBox(ox, oy, oz, dir.x, dir.y, dir.z, b.box);
-        if (t >= 0 && t < hitDist) { hitDist = t; barrelHit = i; }
+        if (t >= 0 && t < hitDist) { hitDist = t; barrelHit = i; dogOwnerHit = -1; }
+      });
+      this.players.forEach(v => {
+        if (v === p || !v.dog || !v.dog.alive || !v.alive) return;
+        const d = v.dog;
+        const t = this.mapData.segBox(ox, oy, oz, dir.x, dir.y, dir.z, {
+          x1: d.x - 0.22, y1: 0, z1: d.z - 0.22, x2: d.x + 0.22, y2: 0.55, z2: d.z + 0.22
+        });
+        if (t >= 0 && t < hitDist) { hitDist = t; barrelHit = -1; dogOwnerHit = v.id; }
       });
       if (barrelHit >= 0) {
         this.damageBarrel(barrelHit, def.dmg, p);
+        result = { x: ox + dir.x * hitDist, y: oy + dir.y * hitDist, z: oz + dir.z * hitDist, kind: 1 };
+      } else if (dogOwnerHit >= 0) {
+        const dv = this.players.get(dogOwnerHit);
+        if (dv && dv.dog) {
+          dv.dog.hp -= def.dmg;
+          this.emitEvent({ type: 'dog', event: 'hurt', dogId: dogOwnerHit, x: dv.dog.x, y: 0.3, z: dv.dog.z });
+          if (dv.dog.hp <= 0) {
+            dv.dog.alive = false;
+            this.emitEvent({ type: 'dog', event: 'die', dogId: dogOwnerHit, killerId: p.id });
+          }
+        }
         result = { x: ox + dir.x * hitDist, y: oy + dir.y * hitDist, z: oz + dir.z * hitDist, kind: 1 };
       } else if (rc.blocked) {
         result = { x: ox + dir.x * rc.dist, y: oy + dir.y * rc.dist, z: oz + dir.z * rc.dist, kind: 1 };
@@ -1235,6 +1291,107 @@ class Game {
     });
   }
 
+  // ---------- 哈基狗（购买后跟随主人；30 米内有敌人自动撕咬） ----------
+  dogCollides(x, z) {
+    const boxes = [].concat(this.mapData.walls, this.mapData.crates || [], this.mapData.covers || []);
+    for (const b of boxes) {
+      if (x >= b.x1 - 0.18 && x <= b.x2 + 0.18 && z >= b.z1 - 0.18 && z <= b.z2 + 0.18 && b.y2 > 0.3) return true;
+    }
+    return false;
+  }
+  tickDogs(dt) {
+    const now = Date.now();
+    this.players.forEach(p => {
+      const d = p.dog;
+      if (!d) return;
+      if (!d.alive) return;
+      // 主人死亡 → 狗直接死亡
+      if (!p.alive) {
+        d.alive = false;
+        this.emitEvent({ type: 'dog', event: 'die', dogId: p.id, killerId: 0 });
+        return;
+      }
+      // 索敌：30 米内最近、且视线可见（不隔烟、不隔墙）的敌人
+      let target = null, bestD = 30;
+      this.players.forEach(v => {
+        if (v === p || !v.alive || v.team === p.team) return;
+        const dd = Math.hypot(v.x - p.x, v.z - p.z);
+        if (dd < bestD
+          && !this.smokeBlocks(d.x, 0.3, d.z, v.x, v.eye, v.z)
+          && this.mapData.losClear(d.x, 0.3, d.z, v.x, v.eye, v.z, 0.15)) { bestD = dd; target = v; }
+      });
+      if (target) {
+        d.state = 'chase'; d.target = target.id;
+        // A* 寻路追向目标（狗不会卡墙）
+        d.pathT -= dt;
+        if (d.pathT <= 0) {
+          d.pathT = 0.4;
+          const np = this.mapData.findPathSmooth(d.x, d.z, target.x, target.z);
+          d.path = (np && np.length > 1) ? np.slice(1) : [{ x: target.x, z: target.z }];
+        }
+        let wx2 = null, wz2 = null;
+        if (d.path && d.path.length) {
+          const pt = d.path[0];
+          const pdx = pt.x - d.x, pdz = pt.z - d.z;
+          if (Math.hypot(pdx, pdz) < 0.3) d.path.shift();
+          else { wx2 = pt.x; wz2 = pt.z; }
+        }
+        if (wx2 === null) { wx2 = target.x; wz2 = target.z; }
+        const dx = wx2 - d.x, dz = wz2 - d.z;
+        const dist = Math.hypot(dx, dz);
+        const tdist = Math.hypot(target.x - d.x, target.z - d.z);
+        if (dist > 0.01) {
+          const speed = 7.5;
+          const nx = d.x + dx / dist * speed * dt;
+          const nz = d.z + dz / dist * speed * dt;
+          if (!this.dogCollides(nx, d.z)) d.x = nx;
+          if (!this.dogCollides(d.x, nz)) d.z = nz;
+          d.yaw = Math.atan2(dx, dz);
+        }
+        // 撕咬：贴身一口 2-5 血，35% 概率减速
+        d.biteCd -= dt;
+        if (tdist <= 0.85 && d.biteCd <= 0) {
+          d.biteCd = 1.0;
+          const dmg = 2 + Math.floor(Math.random() * 4);
+          this.applyDamage(target, p, { dmg, armorPen: 1 }, 1, tdist, 1, 'dog');
+          const slow = Math.random() < 0.35;
+          if (slow) target.slowUntil = now + 1600;
+          this.emitEvent({ type: 'dog', event: 'bite', dogId: p.id, victimId: target.id, dmg, slow, x: d.x, z: d.z });
+        }
+      } else {
+        d.state = 'follow'; d.target = null;
+        // 跟随：停在主人身后约 1.3 米（A* 寻路，不会卡墙）
+        const bx = p.x + Math.sin(p.yaw) * 1.3, bz = p.z + Math.cos(p.yaw) * 1.3;
+        const dist = Math.hypot(bx - d.x, bz - d.z);
+        if (dist > 0.35) {
+          d.pathT -= dt;
+          if (d.pathT <= 0) {
+            d.pathT = 0.4;
+            const np = this.mapData.findPathSmooth(d.x, d.z, bx, bz);
+            d.path = (np && np.length > 1) ? np.slice(1) : [{ x: bx, z: bz }];
+          }
+          let wx2 = bx, wz2 = bz;
+          if (d.path && d.path.length) {
+            const pt = d.path[0];
+            const pdx = pt.x - d.x, pdz = pt.z - d.z;
+            if (Math.hypot(pdx, pdz) < 0.3) d.path.shift();
+            else { wx2 = pt.x; wz2 = pt.z; }
+          }
+          const dx = wx2 - d.x, dz = wz2 - d.z;
+          const pdist = Math.hypot(dx, dz);
+          if (pdist > 0.01) {
+            const speed = Math.min(6.5, dist * 4 + 2.5);
+            const nx = d.x + dx / pdist * speed * dt;
+            const nz = d.z + dz / pdist * speed * dt;
+            if (!this.dogCollides(nx, d.z)) d.x = nx;
+            if (!this.dogCollides(d.x, nz)) d.z = nz;
+            d.yaw = Math.atan2(dx, dz);
+          }
+        }
+      }
+    });
+  }
+
   // ---------- C4 ----------
   checkPickup(p) {
     if (this.bomb.state !== C.BOMB_DROPPED) return;
@@ -1415,6 +1572,16 @@ class Game {
         return [+s.x.toFixed(1), +s.y.toFixed(1), +s.z.toFixed(1), +s.r.toFixed(1),
           +Math.max(0, Math.min(1, (s.born + s.life - nowS) / s.life)).toFixed(2)];
       }),
+      dogs: (() => {
+        const out = [];
+        this.players.forEach(p => {
+          const d = p.dog;
+          if (!d || !d.alive) return;
+          out.push([p.id, +d.x.toFixed(1), +d.z.toFixed(1), +d.yaw.toFixed(2),
+            d.state === 'chase' ? 1 : 0, Math.max(1, Math.ceil(d.hp)), p.team]);
+        });
+        return out;
+      })(),
       hostages: this.hostages.map(h => [h.id, +h.x.toFixed(1), 0, +h.z.toFixed(1), +h.yaw.toFixed(2), h.state === 'follow' ? 1 : 0, h.leader ? h.leader.id : 0]),
       rescued: this.rescued,
       armsLadder: ARMS_LADDER,

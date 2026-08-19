@@ -559,6 +559,124 @@ const Render = (function () {
   }
   function _debugCrates() { return crateMeshes.filter(g => g.visible).length; }
 
+  // ---------- 哈基狗（商店商品：跟随主人 / 冲咬敌人 / 可被枪杀 / 随主人死亡） ----------
+  const dogMeshes = new Map(); // ownerId -> {group, targetX, targetZ, targetYaw, chasing, dying}
+  let dogClock = 0;
+  function buildDogModel(team) {
+    const g = new THREE.Group();
+    const fur = new THREE.MeshPhongMaterial({ color: 0xd8c8a8, shininess: 18, specular: 0x3a3a3a });
+    const furDark = new THREE.MeshPhongMaterial({ color: 0x8a6f4f, shininess: 12, specular: 0x2a2a2a });
+    const collarMat = new THREE.MeshPhongMaterial({ color: team === GAMECONST.TEAM_T ? 0xc87f3a : 0x4f78a4, shininess: 20, specular: 0x333333 });
+    const noseMat = new THREE.MeshPhongMaterial({ color: 0x241a12, shininess: 10, specular: 0x222222 });
+    // 身体（横放椭球，前向 +z 与人物约定一致）
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 8), fur);
+    body.scale.set(1.35, 0.9, 0.85);
+    body.position.y = 0.28;
+    // 头 + 口鼻 + 耳朵
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.115, 10, 8), fur);
+    head.position.set(0, 0.36, 0.24);
+    head.scale.set(0.95, 0.9, 0.95);
+    const snout = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.05, 0.09), fur);
+    snout.position.set(0, 0.32, 0.32);
+    const noseTip = new THREE.Mesh(new THREE.SphereGeometry(0.022, 6, 5), noseMat);
+    noseTip.position.set(0, 0.33, 0.375);
+    const earL = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.09, 6), furDark);
+    earL.position.set(-0.075, 0.47, 0.2);
+    const earR = earL.clone(); earR.position.x = 0.075;
+    // 队色项圈
+    const collar = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.022, 6, 10), collarMat);
+    collar.position.set(0, 0.33, 0.27);
+    collar.rotation.x = Math.PI / 2 - 0.35;
+    // 尾巴（可摇）
+    const tailPivot = new THREE.Group();
+    tailPivot.position.set(0, 0.3, -0.22);
+    const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.03, 0.16, 6), fur);
+    tail.position.y = 0.06;
+    tail.rotation.x = -0.7;
+    tailPivot.add(tail);
+    // 四条腿（跑动摆动）
+    function makeLeg(x, z) {
+      const pv = new THREE.Group();
+      pv.position.set(x, 0.24, z);
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.026, 0.2, 6), furDark);
+      leg.position.y = -0.09;
+      pv.add(leg);
+      g.add(pv);
+      return pv;
+    }
+    const legFL = makeLeg(0.085, 0.14), legFR = makeLeg(-0.085, 0.14);
+    const legBL = makeLeg(0.085, -0.14), legBR = makeLeg(-0.085, -0.14);
+    g.add(body, head, snout, noseTip, earL, earR, collar, tailPivot);
+    g.traverse(o => { if (o.isMesh) { o.castShadow = true; } });
+    g.userData = { legFL, legFR, legBL, legBR, tailPivot, body };
+    return g;
+  }
+  function updateDogs(list) {
+    const seen = new Set();
+    list.forEach(d => {
+      const oid = d[0], x = d[1], z = d[2], yaw = d[3], chasing = d[4], hp = d[5], team = d[6];
+      seen.add(oid);
+      let m = dogMeshes.get(oid);
+      if (!m) {
+        m = { group: buildDogModel(team), targetX: x, targetZ: z, targetYaw: yaw, chasing: 0, dying: 0 };
+        scene.add(m.group);
+        dogMeshes.set(oid, m);
+      }
+      m.targetX = x; m.targetZ = z; m.targetYaw = yaw; m.chasing = chasing; m.hp = hp;
+      // 烟雾遮挡：狗与人物同一套判定（烟里/相机在烟内都不渲染）
+      let hidden = false;
+      if (smokeState.length) {
+        if (smokeStrength > 0.02) hidden = true;
+        else for (const s of smokeState) {
+          if (Math.hypot(x - s.x, z - s.z) < s.r) { hidden = true; break; }
+        }
+      }
+      m.group.visible = !hidden;
+    });
+    // 从快照消失的狗 → 躺倒淡出（被打死/主人死亡）
+    for (const [oid, m] of dogMeshes) {
+      if (seen.has(oid)) continue;
+      if (m.dying <= 0) { m.dying = 1.2; m.group.visible = true; }
+    }
+  }
+  function animateDogs(dt) {
+    dogClock += dt;
+    for (const [oid, m] of dogMeshes) {
+      const g = m.group;
+      // 死亡淡出：侧倒 + 下沉 + 透明
+      if (m.dying > 0) {
+        m.dying -= dt;
+        g.rotation.x = Math.min(Math.PI / 2, g.rotation.x + dt * 7);
+        g.position.y = -0.12 * (1 - m.dying / 1.2);
+        const op = Math.max(0, m.dying / 1.2);
+        g.traverse(o => {
+          if (o.material) {
+            if (!o.material.transparent) { o.material.transparent = true; o.material.needsUpdate = true; }
+            o.material.opacity = op;
+          }
+        });
+        if (m.dying <= 0) { scene.remove(g); dogMeshes.delete(oid); }
+        continue;
+      }
+      // 位置/朝向平滑
+      const k = Math.min(1, dt * 10);
+      g.position.x += (m.targetX - g.position.x) * k;
+      g.position.z += (m.targetZ - g.position.z) * k;
+      let dy = m.targetYaw - g.rotation.y;
+      while (dy > Math.PI) dy -= Math.PI * 2;
+      while (dy < -Math.PI) dy += Math.PI * 2;
+      g.rotation.y += dy * Math.min(1, dt * 12);
+      // 奔跑/小跑摆腿 + 尾巴
+      const sp = m.chasing ? 13 : 7;
+      const swing = Math.sin(dogClock * sp) * (m.chasing ? 0.6 : 0.3);
+      const ud = g.userData;
+      ud.legFL.rotation.x = swing; ud.legBR.rotation.x = swing;
+      ud.legFR.rotation.x = -swing; ud.legBL.rotation.x = -swing;
+      ud.tailPivot.rotation.y = m.chasing ? Math.sin(dogClock * 4) * 0.1 : Math.sin(dogClock * 9) * 0.5;
+      ud.body.position.y = 0.28 + Math.abs(Math.sin(dogClock * sp)) * 0.025;
+    }
+  }
+
   // ---------- C4 炸药包（场上模型：掉落/安放后可见，安放后红灯闪烁） ----------
   let bombGroup = null;
   let bombLed = null;
@@ -1884,6 +2002,7 @@ const Render = (function () {
     } else camera.rotation.z = 0;
     updateEffects(dt);
     animateSmokes(dt);
+    animateDogs(dt);
     // 天空云朵缓慢漂移
     const cloudT = performance.now() / 1000;
     for (let i = 0; i < skyCloudPool.length; i++) {
@@ -1920,7 +2039,7 @@ const Render = (function () {
   function getCamera() { return camera; }
 
   return {
-    init, renderFrame, updatePlayers, tracer, impact, muzzleFlash, shell, flashAt, explosion, getCamera, flinch, updateNades, updateSmokes, updateHostages, updateCrates, updateBomb, barrelDestroyed, resetBarrels, setQuality, _debugCrates,
+    init, renderFrame, updatePlayers, tracer, impact, muzzleFlash, shell, flashAt, explosion, getCamera, flinch, updateNades, updateSmokes, updateDogs, updateHostages, updateCrates, updateBomb, barrelDestroyed, resetBarrels, setQuality, _debugCrates,
     // 烟雾视界强度（main.js 用；测试用 _debugSmoke）
     smokeStrength: () => smokeStrength,
     // 烟雾是否遮挡某位置（雷达/模型共用：相机在烟内 → 全部遮挡；点在烟内 → 遮挡）
@@ -1947,6 +2066,10 @@ const Render = (function () {
     _debugSmokeSpheres: () => smokeWallPool.filter(m => m.visible).length,
     _debugBomb: () => ({ visible: !!(bombGroup && bombGroup.visible), planted: bombPlanted }),
     _debugBombLed: () => !!(bombLed && bombLed.visible),
+    _debugDogs: () => [...dogMeshes.values()].map(m => ({
+      x: +m.group.position.x.toFixed(1), z: +m.group.position.z.toFixed(1),
+      chasing: m.chasing, dying: +m.dying.toFixed(2), visible: m.group.visible
+    })),
     _debugBarrel: (i) => {
       if (!barrelIMesh) return null;
       const c = new THREE.Color();
