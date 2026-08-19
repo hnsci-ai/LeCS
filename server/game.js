@@ -249,6 +249,18 @@ class Game {
       // 测试辅助：撤销安放（隐藏模型）
       this.bomb.state = C.BOMB_HIDDEN;
       this.bomb.carrier = null;
+    } else if (msg.cmd === 'smoke') {
+      // 测试辅助：直接生成一团满尺寸烟雾（渲染验证用）
+      this.smokes.push({
+        x: msg.x !== undefined ? msg.x : target.x,
+        y: 0.1,
+        z: msg.z !== undefined ? msg.z : target.z,
+        r: W.smokegrenade.blastRadius || 5.5,
+        maxR: W.smokegrenade.blastRadius || 5.5,
+        born: Date.now(),
+        life: (W.smokegrenade.smokeTime || 13) * 1000,
+        growUntil: Date.now()
+      });
     }
   }
 

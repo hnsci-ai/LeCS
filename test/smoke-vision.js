@@ -149,6 +149,8 @@ const dist = (a, b) => Math.sqrt((a.r - b.r) ** 2 + (a.g - b.g) ** 2 + (a.b - b.
   const dOut = dist(p0, p1);
   console.log('  无烟→有烟 像素距离:', dOut.toFixed(0));
   check(dOut > 60, '外面看不到烟里的 Bot（双层烟壳+云絮遮挡，像素距离>60）');
+  const heads1 = await page.evaluate(() => Render._debugPlayerHeads());
+  check(heads1.every(h => h.id !== botId), '烟里的 Bot 模型整体隐藏（不再有黑影子）');
 
   // 4. 里面看：观察员进烟，Bot 移开 → 朝场边墙看只看到灰烟墙+雾
   await page.evaluate(() => window.__lecsSend({ t: 'dev', cmd: 'tp', x: 0, z: -7 })); // 进到烟团内部
@@ -165,6 +167,8 @@ const dist = (a, b) => Math.sqrt((a.r - b.r) ** 2 + (a.g - b.g) ** 2 + (a.b - b.
   check(dbg2 && dbg2.fogDensity > 0.02, '烟内指数雾生效（fogDensity>0.02）');
   check(p2 && Math.abs(p2.r - p2.g) < 30 && Math.abs(p2.g - p2.b) < 30 && p2.r + p2.g + p2.b > 250,
     '烟内画面呈灰烟色（外面世界被烟墙+雾遮住）');
+  const heads2 = await page.evaluate(() => Render._debugPlayerHeads());
+  check(heads2.length === 0, '相机在烟内时所有人物模型隐藏（烟里看不到外面的人）');
 
   check(errors.length === 0, '无 JS 错误' + (errors.length ? ': ' + errors[0].slice(0, 150) : ''));
   await browser.close();

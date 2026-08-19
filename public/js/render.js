@@ -1533,8 +1533,30 @@ const Render = (function () {
     }
     list.forEach(p => {
       const m = ensurePlayer(p.id, p.team);
+      // 死亡/复活簿记优先（即使被烟雾/观战隐藏，尸体与舔包流程不能断）
+      if (!p.alive) {
+        if (m.wasAlive) {
+          m.wasAlive = false;
+          Ragdoll.spawn(p.id, p.x, p.y, p.z, p.yaw, p.team, p.armor, p.helmet);
+        }
+        m.group.visible = false; // 尸体由布娃娃物理呈现
+        return;
+      }
+      if (!m.wasAlive) Ragdoll.removeFor(p.id); // 重生时清掉旧尸体
+      m.wasAlive = true;
+      m.deadAnim = 0;
       if (p.id === myId) { m.group.visible = false; return; } // 自己由第一人称视角呈现
       if (hideId && p.id === hideId) { m.group.visible = false; return; } // 观战目标：镜头在其体内，隐藏模型（否则看到帽檐/枪模）
+      // 烟雾遮挡（彻底版）：烟里的人整体不渲染 → 外面看不到烟里；
+      // 相机在烟内时所有人不渲染 → 烟里看不到外面（不再有"黑影子"）
+      if (smokeState.length) {
+        if (smokeStrength > 0.05) { m.group.visible = false; return; }
+        let inSmoke = false;
+        for (const s of smokeState) {
+          if (Math.hypot(p.x - s.x, p.z - s.z) < s.r * 0.95) { inSmoke = true; break; }
+        }
+        if (inSmoke) { m.group.visible = false; return; }
+      }
       const g = m.group;
       g.visible = true;
       // 同步第三人称持枪模型（按当前武器切换，挂在胸前枪枢轴上随身体晃动）
@@ -1545,11 +1567,7 @@ const Render = (function () {
         if (m.gun) g.userData.gunHold.add(m.gun);
         m.gunWeapon = wid;
       }
-      if (p.alive) {
-        if (!m.wasAlive) Ragdoll.removeFor(p.id); // 重生时清掉旧尸体
-        m.wasAlive = true;
-        m.deadAnim = 0;
-        g.visible = true;
+      {
         g.position.set(p.x, p.y, p.z);
         g.rotation.set(0, p.yaw, 0);
         const scale = p.crouch ? 0.72 : 1;
@@ -1585,19 +1603,12 @@ const Render = (function () {
         } else {
           ud.torso.rotation.x = 0;
         }
-        // 跑动尘土        // 跑动尘土
+        // 跑动尘土
         m.dustT = (m.dustT || 0) - 1;
         if (sp > 3.3 && m.dustT <= 0) {
           m.dustT = 0.34;
           spawnBurst(p.x, p.y + 0.12, p.z, { count: 4, color: 0xc9b489, size: 0.05, speed: 0.8, life: 0.45, gravity: 0.7, upBias: 1.1 });
         }
-      } else {
-        if (m.wasAlive) {
-          // 死亡：布娃娃尸体（无血雾，几秒后沉没并变为战利品箱）
-          m.wasAlive = false;
-          Ragdoll.spawn(p.id, p.x, p.y, p.z, p.yaw, p.team, p.armor, p.helmet);
-        }
-        g.visible = false; // 尸体由布娃娃物理呈现
       }
     });
   }
