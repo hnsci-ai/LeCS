@@ -713,12 +713,13 @@ const Render = (function () {
     const wallTex = makeCloudTex(2);
     const shellTex = makeCloudTex(9);
     const shellTex2 = makeCloudTex(5);
-    // 内壁烟球：BackSide + 不写深度 → 透明烟墙（相机在球内也必须渲染）。
+    // 内壁/外壳/内壳烟球：默认【不透明实体 + 写深度】——烟后的一切被深度剔除，
+    // 任何渲染管线（含后期 SSAO/FXAA）都不可能透出敌人；消散期才切回透明淡出。
     // 用 MeshBasic：烟雾不受光照方向影响，烟内看是稳定的灰墙（Lambert 会被半球光染成土色）
     for (let i = 0; i < SMOKE_MAX; i++) {
       const mat = new THREE.MeshBasicMaterial({
-        map: wallTex, color: 0xcfd4d9, transparent: true, opacity: 0,
-        depthWrite: false, side: THREE.BackSide
+        map: wallTex, color: 0xcfd4d9, transparent: false, opacity: 1,
+        side: THREE.BackSide
       });
       const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 12), mat);
       mesh.visible = false;
@@ -726,12 +727,12 @@ const Render = (function () {
       scene.add(mesh);
       smokeWallPool.push(mesh);
     }
-    // 外壳烟球（FrontSide）：从外面看是烟团前表面，半透明盖住烟内的人；
+    // 外壳烟球（FrontSide）：从外面看是烟团前表面，不透明实体盖住烟内的一切；
     // 站在烟内时 FrontSide 面被剔除（不渲染），不影响烟内视界
     for (let i = 0; i < SMOKE_MAX; i++) {
       const mat = new THREE.MeshBasicMaterial({
-        map: shellTex, color: 0xcfd4d9, transparent: true, opacity: 0,
-        depthWrite: false, side: THREE.FrontSide
+        map: shellTex, color: 0xcfd4d9, transparent: false, opacity: 1,
+        side: THREE.FrontSide
       });
       const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 12), mat);
       mesh.visible = false;
@@ -742,8 +743,8 @@ const Render = (function () {
     // 内壳烟球（FrontSide，r×0.8）：与外壳反向旋转，两层纹理叠出体积感
     for (let i = 0; i < SMOKE_MAX; i++) {
       const mat = new THREE.MeshBasicMaterial({
-        map: shellTex2, color: 0xcfd4d9, transparent: true, opacity: 0,
-        depthWrite: false, side: THREE.FrontSide
+        map: shellTex2, color: 0xcfd4d9, transparent: false, opacity: 1,
+        side: THREE.FrontSide
       });
       const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 12), mat);
       mesh.visible = false;
@@ -838,22 +839,32 @@ const Render = (function () {
       const s = renderList[gi].s;
       const r = s.r, fade = renderList[gi].fade;
       const yc = s.y + 0.6;
-      // 内壁烟墙（全不透明：烟内完全看不到外面）
+      // 全浓期为不透明实体（写深度 → 烟后一切被剔除），消散期切透明淡出
+      const applySmokeMat = (mat) => {
+        const wantTransparent = fade < 0.995;
+        if (mat.transparent !== wantTransparent) {
+          mat.transparent = wantTransparent;
+          mat.depthWrite = !wantTransparent;
+          mat.needsUpdate = true;
+        }
+        if (wantTransparent) mat.opacity = fade;
+      };
+      // 内壁烟墙（不透明实体：烟内完全看不到外面）
       if (wi < smokeWallPool.length) {
         const wl = smokeWallPool[wi++];
         wl.visible = true;
         wl.position.set(s.x, yc, s.z);
         wl.scale.setScalar(r * 0.95);
-        wl.material.opacity = 1.0 * fade;
+        applySmokeMat(wl.material);
         wl.rotation.y = smokeClock * 0.05 + gi; // 烟墙缓慢旋转 → 表面纹理流动
       }
-      // 外壳（FrontSide，r×1.0）：从外面完全盖住烟内的人，站在烟内时自动不渲染
+      // 外壳（FrontSide，r×1.0）：不透明实体，从外面完全盖住烟内的人；站在烟内时自动不渲染
       if (hi < smokeShellPool.length) {
         const shl = smokeShellPool[hi++];
         shl.visible = true;
         shl.position.set(s.x, yc, s.z);
         shl.scale.setScalar(r * 1.0);
-        shl.material.opacity = 1.0 * fade;
+        applySmokeMat(shl.material);
         shl.rotation.y = -smokeClock * 0.04 + gi * 1.3;
       }
       // 内壳（FrontSide，r×0.8）：第二层烟面，反方向旋转 → 双层纹理叠出厚度
@@ -862,7 +873,7 @@ const Render = (function () {
         sh2.visible = true;
         sh2.position.set(s.x, yc, s.z);
         sh2.scale.setScalar(r * 0.8);
-        sh2.material.opacity = 0.98 * fade;
+        applySmokeMat(sh2.material);
         sh2.rotation.y = smokeClock * 0.06 + gi * 2.1;
       }
       // 核心云絮：绕烟团翻滚
@@ -890,9 +901,9 @@ const Render = (function () {
         sp.visible = true;
         const a = gi * 1.7 + k * 0.698; // 9 个绕球面均匀分布
         sp.position.set(
-          s.x + Math.cos(a) * r * 0.96,
+          s.x + Math.cos(a) * r * 1.06,
           yc + Math.sin(k * 2.3 + smokeClock * 0.25 + gi) * r * 0.5,
-          s.z + Math.sin(a) * r * 0.96
+          s.z + Math.sin(a) * r * 1.06
         );
         const sc = r * 0.85;
         sp.scale.set(sc, sc, 1);
