@@ -823,36 +823,37 @@ const Render = (function () {
       if (nowT - smokeGhosts[i].t0 > 1500) smokeGhosts.splice(i, 1);
     }
     const renderList = [];
-    // 扩散初期快速变浓（r 1.2→2.7 之间按半径拉满不透明度）
+    // 全程全浓：只在生命最后 15% 快速消散（不再随生命线性变淡）；
+    // 扩散初期按半径快速拉满浓度（1.2m 起 50%，半径 2.7m 时全浓）
     for (const s of smokeState) renderList.push({
       s,
-      fade: (0.3 + 0.7 * s.life) * Math.min(1, Math.max(0.45, (s.r - 1.2) / 1.5))
+      fade: Math.min(1, s.life / 0.15) * Math.min(1, Math.max(0.5, (s.r - 1.2) / 1.5))
     });
     for (const g of smokeGhosts) {
       const f = Math.max(0, 1 - (nowT - g.t0) / 1200);
-      if (f > 0.02) renderList.push({ s: g, fade: f * (0.3 + 0.7 * g.life) });
+      if (f > 0.02) renderList.push({ s: g, fade: f });
     }
     let si = 0, wi = 0, hi = 0;
     for (let gi = 0; gi < renderList.length && gi < SMOKE_MAX; gi++) {
       const s = renderList[gi].s;
       const r = s.r, fade = renderList[gi].fade;
       const yc = s.y + 0.6;
-      // 内壁烟墙
+      // 内壁烟墙（全不透明：烟内完全看不到外面）
       if (wi < smokeWallPool.length) {
         const wl = smokeWallPool[wi++];
         wl.visible = true;
         wl.position.set(s.x, yc, s.z);
         wl.scale.setScalar(r * 0.95);
-        wl.material.opacity = 0.98 * fade;
+        wl.material.opacity = 1.0 * fade;
         wl.rotation.y = smokeClock * 0.05 + gi; // 烟墙缓慢旋转 → 表面纹理流动
       }
-      // 外壳（FrontSide，r×1.0）：从外面盖住烟内的人，站在烟内时自动不渲染
+      // 外壳（FrontSide，r×1.0）：从外面完全盖住烟内的人，站在烟内时自动不渲染
       if (hi < smokeShellPool.length) {
         const shl = smokeShellPool[hi++];
         shl.visible = true;
         shl.position.set(s.x, yc, s.z);
         shl.scale.setScalar(r * 1.0);
-        shl.material.opacity = 0.95 * fade;
+        shl.material.opacity = 1.0 * fade;
         shl.rotation.y = -smokeClock * 0.04 + gi * 1.3;
       }
       // 内壳（FrontSide，r×0.8）：第二层烟面，反方向旋转 → 双层纹理叠出厚度
@@ -861,7 +862,7 @@ const Render = (function () {
         sh2.visible = true;
         sh2.position.set(s.x, yc, s.z);
         sh2.scale.setScalar(r * 0.8);
-        sh2.material.opacity = 0.9 * fade;
+        sh2.material.opacity = 0.98 * fade;
         sh2.rotation.y = smokeClock * 0.06 + gi * 2.1;
       }
       // 核心云絮：绕烟团翻滚
@@ -919,7 +920,7 @@ const Render = (function () {
       );
       const scl = 4.2 + i * 2.0;
       q.scale.set(scl, scl, 1);
-      q.material.opacity = st * (0.38 - i * 0.06);
+      q.material.opacity = st * (0.45 - i * 0.07);
       q.material.rotation = ph * 0.16;
     }
   }

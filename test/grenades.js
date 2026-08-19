@@ -104,9 +104,9 @@ class Client {
   const smokes2 = a.last.smokes || [];
   console.log('  烟团(8s):', JSON.stringify(smokes2));
   check(smokes2.length > 0 && smokes2[0][3] >= 5.0, '烟雾扩散至大范围（r=' + (smokes2[0] ? smokes2[0][3] : 0) + '）✓');
-  // 烟雾阻挡 Bot 视线由 bot 测试覆盖；这里验证烟团持续存在（新时长 22 秒）
-  await sleep(7000); // 距投掷约 15 秒：旧时长 14 秒已过期
-  check((a.last.smokes || []).length > 0, '烟团持续存在（超过 15 秒）');
+  // 烟雾阻挡 Bot 视线由 bot 测试覆盖；这里验证烟团持续存在（新时长 13 秒）
+  await sleep(3000); // 距投掷约 11 秒：仍在持续
+  check((a.last.smokes || []).length > 0, '烟团持续存在（超过 11 秒）');
 
   console.log('== 5. 键盘 1-5 切枪（浏览器端）==');
   const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: ['--no-sandbox'] });
