@@ -179,7 +179,7 @@ const Render = (function () {
 
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x9ec8e2);
-    scene.fog = new THREE.Fog(0xa9c9d8, 55, 170);
+    scene.fog = baseFog;
 
     camera = new THREE.PerspectiveCamera(75, 1, 0.05, 400);
     camera.rotation.order = 'YXZ';
@@ -443,72 +443,292 @@ const Render = (function () {
   function _debugCrates() { return crateMeshes.filter(g => g.visible).length; }
 
   // ---------- 烟雾弹烟团 ----------
-  const smokePool = [];
-  const smokeSpherePool = []; // 实心烟球：真正遮挡玩家视线（外面看不到里面 / 里面是灰墙）
-  let smokeTex = null;
-  function initSmoke() {
-    const c = makeCanvas(64, 64, (g, w, h) => {
-      const grad = g.createRadialGradient(w / 2, h / 2, 2, w / 2, h / 2, w / 2);
-      grad.addColorStop(0, 'rgba(200,200,205,0.85)');
-      grad.addColorStop(0.55, 'rgba(160,160,168,0.5)');
-      grad.addColorStop(1, 'rgba(140,140,150,0)');
-      g.fillStyle = grad;
+  // 分层结构（同时解决"外面看不到里面"与"里面看不到外面"，且不再是一颗硬球）：
+  //  1) 内壁烟球（BackSide）：站在烟里时四周是翻滚的灰烟墙；从外面看则盖住烟团后的一切背景
+  //  2) 云絮精灵（billboard）：核心体积 + 贴球面的边缘絮，遮住球体硬边，随帧旋转/漂移/脉动
+  //  3) 相机前烟絮板（depthTest=false）：站在烟里时镜头前持续飘动的烟，配合指数雾化远
+  //  4) 烟内指数雾（FogExp2）：按"离烟团中心越近越浓"逐帧平滑，远处世界溶入烟色
+  const baseFog = new THREE.Fog(0xa9c9d8, 55, 170);
+  const smokeFog = new THREE.FogExp2(0xaab0b6, 0);
+  const SMOKE_MAX = 8;           // 同屏烟团上限
+  const SMOKE_CORE = 8;          // 每团核心云絮
+  const SMOKE_EDGE = 9;          // 每团边缘云絮（贴球面遮硬边）
+  const smokeState = [];         // 最新快照 [{x,y,z,r,life}]
+  const smokeGhosts = [];        // 已从快照移除的烟团：继续淡出（避免突然消失）
+  const smokeWallPool = [];      // 内壁烟球（BackSide）
+  const smokeShellPool = [];     // 外壳烟球（FrontSide，r×1.0）：从外面盖住烟内的人
+  const smokeShell2Pool = [];    // 内壳烟球（FrontSide，r×0.8）：第二层，增加烟团厚度与层次
+  const smokePool = [];          // 云絮精灵
+  const smokeTexes = [];         // 两张烟絮贴图（交替使用增加变化）
+  const camSmokePool = [];       // 相机前烟絮板
+  let smokeClock = 0;            // 烟团动画时钟
+  let smokeStrength = 0;         // 相机在烟内的强度 0..1（逐帧平滑）
+
+  function makeSmokeTex(seed, scale) {
+    const t = new THREE.CanvasTexture(makeCanvas(128, 128, (g, w, h) => {
+      g.clearRect(0, 0, w, h);
+      // 数十团絮状云斑叠加 → 不规则的翻滚云团
+      for (let i = 0; i < 30; i++) {
+        const a = i * 2.399 + seed;
+        const px = w / 2 + Math.sin(a) * w * 0.36;
+        const py = h / 2 + Math.cos(a * 1.7 + seed) * h * 0.36;
+        const pr = (5 + ((i * 37 + seed * 17) % 22)) * scale;
+        const al = 0.06 + ((i * 29 + seed * 13) % 10) / 10 * 0.16;
+        const gr = g.createRadialGradient(px, py, pr * 0.05, px, py, pr);
+        gr.addColorStop(0, `rgba(222,225,229,${al})`);
+        gr.addColorStop(0.55, `rgba(196,201,207,${al * 0.8})`);
+        gr.addColorStop(1, 'rgba(178,184,191,0)');
+        g.fillStyle = gr;
+        g.beginPath(); g.arc(px, py, pr, 0, Math.PI * 2); g.fill();
+      }
+    }));
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  }
+
+  // 致密云贴图：alpha 整体近 1、仅上下（球极）渐隐 —— 用于烟墙/外壳球面。
+  // 注意：球面 UV 铺满整张贴图，不能在贴图内做径向衰减（否则球面会出现大片透明带）
+  function makeCloudTex(seed) {
+    const t = new THREE.CanvasTexture(makeCanvas(128, 128, (g, w, h) => {
+      g.clearRect(0, 0, w, h);
+      // 基底：上下（球极方向）渐隐，中间高 alpha
+      const base = g.createLinearGradient(0, 0, 0, h);
+      base.addColorStop(0, 'rgba(190,196,202,0.25)');
+      base.addColorStop(0.22, 'rgba(210,215,219,0.85)');
+      base.addColorStop(0.5, 'rgba(214,218,222,0.93)');
+      base.addColorStop(0.78, 'rgba(210,215,219,0.85)');
+      base.addColorStop(1, 'rgba(190,196,202,0.25)');
+      g.fillStyle = base;
       g.fillRect(0, 0, w, h);
-    });
-    smokeTex = new THREE.CanvasTexture(c);
-    smokeTex.colorSpace = THREE.SRGBColorSpace;
-    for (let i = 0; i < 48; i++) {
+      // 亮斑/暗斑：打破均匀感
+      for (let i = 0; i < 40; i++) {
+        const px = w * (((i * 53 + seed * 29) % 97) / 97);
+        const py = h * (((i * 31 + seed * 17) % 89) / 89);
+        const pr = 6 + ((i * 37 + seed * 13) % 22);
+        const al = 0.10 + ((i * 29 + seed * 7) % 10) / 10 * 0.18;
+        const dark = i % 3 === 0;
+        const gr = g.createRadialGradient(px, py, pr * 0.1, px, py, pr);
+        gr.addColorStop(0, dark ? `rgba(138,145,151,${al})` : `rgba(232,236,240,${al})`);
+        gr.addColorStop(0.6, dark ? `rgba(150,157,163,${al * 0.7})` : `rgba(216,221,226,${al * 0.7})`);
+        gr.addColorStop(1, 'rgba(200,205,210,0)');
+        g.fillStyle = gr;
+        g.beginPath(); g.arc(px, py, pr, 0, Math.PI * 2); g.fill();
+      }
+    }));
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  }
+
+  function initSmoke() {
+    smokeTexes.push(makeSmokeTex(1, 1), makeSmokeTex(6.5, 0.7));
+    const wallTex = makeCloudTex(2);
+    const shellTex = makeCloudTex(9);
+    const shellTex2 = makeCloudTex(5);
+    // 内壁烟球：BackSide + 不写深度 → 透明烟墙（相机在球内也必须渲染）。
+    // 用 MeshBasic：烟雾不受光照方向影响，烟内看是稳定的灰墙（Lambert 会被半球光染成土色）
+    for (let i = 0; i < SMOKE_MAX; i++) {
+      const mat = new THREE.MeshBasicMaterial({
+        map: wallTex, color: 0xcfd4d9, transparent: true, opacity: 0,
+        depthWrite: false, side: THREE.BackSide
+      });
+      const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 12), mat);
+      mesh.visible = false;
+      mesh.frustumCulled = false;
+      scene.add(mesh);
+      smokeWallPool.push(mesh);
+    }
+    // 外壳烟球（FrontSide）：从外面看是烟团前表面，半透明盖住烟内的人；
+    // 站在烟内时 FrontSide 面被剔除（不渲染），不影响烟内视界
+    for (let i = 0; i < SMOKE_MAX; i++) {
+      const mat = new THREE.MeshBasicMaterial({
+        map: shellTex, color: 0xcfd4d9, transparent: true, opacity: 0,
+        depthWrite: false, side: THREE.FrontSide
+      });
+      const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 12), mat);
+      mesh.visible = false;
+      mesh.frustumCulled = false;
+      scene.add(mesh);
+      smokeShellPool.push(mesh);
+    }
+    // 内壳烟球（FrontSide，r×0.8）：与外壳反向旋转，两层纹理叠出体积感
+    for (let i = 0; i < SMOKE_MAX; i++) {
+      const mat = new THREE.MeshBasicMaterial({
+        map: shellTex2, color: 0xcfd4d9, transparent: true, opacity: 0,
+        depthWrite: false, side: THREE.FrontSide
+      });
+      const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 12), mat);
+      mesh.visible = false;
+      mesh.frustumCulled = false;
+      scene.add(mesh);
+      smokeShell2Pool.push(mesh);
+    }
+    // 云絮精灵
+    const total = SMOKE_MAX * (SMOKE_CORE + SMOKE_EDGE);
+    for (let i = 0; i < total; i++) {
       const sp = new THREE.Sprite(new THREE.SpriteMaterial({
-        map: smokeTex, transparent: true, opacity: 0, depthWrite: false
+        map: smokeTexes[i % 2], transparent: true, opacity: 0, depthWrite: false
       }));
       sp.visible = false;
       scene.add(sp);
       smokePool.push(sp);
     }
-    // 实心烟球：BackSide + depthWrite=false → 外面看是不透明烟墙，站在里面看到的是环绕灰墙
-    for (let i = 0; i < 8; i++) {
-      const mat = new THREE.MeshLambertMaterial({
-        map: smokeTex, color: 0x9aa2a8, transparent: true, opacity: 0, depthWrite: false, side: THREE.BackSide
+    // 相机前烟絮板（烟内镜头雾气，叠加在画面上层）
+    for (let i = 0; i < 4; i++) {
+      const mat = new THREE.MeshBasicMaterial({
+        map: smokeTexes[i % 2], transparent: true, opacity: 0,
+        depthTest: false, depthWrite: false, fog: false
       });
-      const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), mat);
-      mesh.visible = false;
-      mesh.frustumCulled = false; // 相机在球内也必须渲染
-      scene.add(mesh);
-      smokeSpherePool.push(mesh);
+      const q = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
+      q.visible = false;
+      q.renderOrder = 990;
+      camera.add(q);
+      camSmokePool.push(q);
     }
   }
 
+  // 快照更新（30Hz）：只记录状态，逐帧动画在 animateSmokes 里做（帧间平滑）。
+  // 从快照消失的烟团转入 ghost 列表，1.2 秒内淡出（避免烟团突然消失）
   function updateSmokes(list) {
-    if (!smokePool.length) return;
-    let idx = 0;
-    list.forEach((s, si) => {
-      const x = s[0], y = s[1], z = s[2], r = s[3];
-      const lifeFrac = s[4] === undefined ? 1 : Math.max(0.15, s[4]);
-      // 实心烟球（真正遮挡视线）
-      if (si < smokeSpherePool.length) {
-        const sph = smokeSpherePool[si];
-        sph.visible = true;
-        sph.position.set(x, y + 0.6, z);
-        sph.scale.setScalar(Math.max(0.6, r * 0.98));
-        sph.material.opacity = 0.92 * (0.45 + 0.55 * lifeFrac);
+    const now = performance.now();
+    for (const old of smokeState) {
+      let still = false;
+      for (const s of list) {
+        if (Math.hypot(s[0] - old.x, s[2] - old.z) < 2) { still = true; break; }
       }
-      for (let k = 0; k < 6 && idx < smokePool.length; k++) {
-        const sp = smokePool[idx++];
+      if (!still) smokeGhosts.push({ x: old.x, y: old.y, z: old.z, r: old.r, life: old.life, t0: now });
+    }
+    smokeState.length = 0;
+    for (const s of list) {
+      smokeState.push({
+        x: s[0], y: s[1], z: s[2],
+        r: Math.max(0.6, s[3]),
+        life: s[4] === undefined ? 1 : Math.max(0, s[4])
+      });
+    }
+  }
+
+  // 逐帧动画：烟团翻滚 + 烟内雾效（renderFrame 调用）
+  function animateSmokes(dt) {
+    smokeClock += dt;
+    // —— 相机在烟内的强度：越靠烟团中心越浓（离中心 80% 以上基本能看出去）——
+    let target = 0;
+    for (const s of smokeState) {
+      const d = Math.hypot(camera.position.x - s.x, camera.position.z - s.z);
+      if (d < s.r) {
+        const t = 1 - (d / s.r) * (d / s.r);
+        target = Math.max(target, Math.pow(t, 0.9) * s.life);
+      }
+    }
+    smokeStrength += (target - smokeStrength) * Math.min(1, dt * 4);
+    // —— 烟内指数雾：远处世界溶入烟色；离开烟团后恢复普通雾 ——
+    if (smokeStrength > 0.03) {
+      smokeFog.density = 0.3 * smokeStrength;
+      if (scene.fog !== smokeFog) scene.fog = smokeFog;
+    } else if (scene.fog !== baseFog) {
+      scene.fog = baseFog;
+    }
+
+    // —— 烟团本体（含正在淡出的 ghost 烟团）——
+    const nowT = performance.now();
+    for (let i = smokeGhosts.length - 1; i >= 0; i--) {
+      if (nowT - smokeGhosts[i].t0 > 1500) smokeGhosts.splice(i, 1);
+    }
+    const renderList = [];
+    for (const s of smokeState) renderList.push({ s, fade: 0.3 + 0.7 * s.life });
+    for (const g of smokeGhosts) {
+      const f = Math.max(0, 1 - (nowT - g.t0) / 1200);
+      if (f > 0.02) renderList.push({ s: g, fade: f * (0.3 + 0.7 * g.life) });
+    }
+    let si = 0, wi = 0, hi = 0;
+    for (let gi = 0; gi < renderList.length && gi < SMOKE_MAX; gi++) {
+      const s = renderList[gi].s;
+      const r = s.r, fade = renderList[gi].fade;
+      const yc = s.y + 0.6;
+      // 内壁烟墙
+      if (wi < smokeWallPool.length) {
+        const wl = smokeWallPool[wi++];
+        wl.visible = true;
+        wl.position.set(s.x, yc, s.z);
+        wl.scale.setScalar(r * 0.95);
+        wl.material.opacity = 0.8 * fade;
+        wl.rotation.y = smokeClock * 0.05 + gi; // 烟墙缓慢旋转 → 表面纹理流动
+      }
+      // 外壳（FrontSide，r×1.0）：从外面盖住烟内的人，站在烟内时自动不渲染
+      if (hi < smokeShellPool.length) {
+        const shl = smokeShellPool[hi++];
+        shl.visible = true;
+        shl.position.set(s.x, yc, s.z);
+        shl.scale.setScalar(r * 1.0);
+        shl.material.opacity = 0.7 * fade;
+        shl.rotation.y = -smokeClock * 0.04 + gi * 1.3;
+      }
+      // 内壳（FrontSide，r×0.8）：第二层烟面，反方向旋转 → 双层纹理叠出厚度
+      if (hi < smokeShell2Pool.length) {
+        const sh2 = smokeShell2Pool[hi - 1];
+        sh2.visible = true;
+        sh2.position.set(s.x, yc, s.z);
+        sh2.scale.setScalar(r * 0.8);
+        sh2.material.opacity = 0.62 * fade;
+        sh2.rotation.y = smokeClock * 0.06 + gi * 2.1;
+      }
+      // 核心云絮：绕烟团翻滚
+      for (let k = 0; k < SMOKE_CORE; k++) {
+        if (si >= smokePool.length) break;
+        const sp = smokePool[si++];
         sp.visible = true;
-        const a = si * 2.399 + k * 2.094;
-        const rr = r * (0.25 + 0.75 * (((si * 7 + k * 13) % 10) / 10));
+        const a = gi * 2.399 + k * 2.094;
+        const rad = r * (0.3 + 0.65 * (((k * 5 + gi * 3) % 7) / 7));
+        const orb = smokeClock * 0.14 * (k % 2 ? 1 : -1);
         sp.position.set(
-          x + Math.cos(a) * rr,
-          y + 0.25 + (((si * 3 + k * 5) % 10) / 10) * 2.6,
-          z + Math.sin(a) * rr
+          s.x + Math.cos(a + orb) * rad,
+          yc - r * 0.15 + (((k * 3 + gi) % 8) / 8) * r * 0.75 + Math.sin(smokeClock * 0.6 + k * 1.7 + gi) * 0.3,
+          s.z + Math.sin(a + orb) * rad
         );
-        const sc = 1.0 + r * 0.55 + ((si + k) % 5) * 0.14;
+        const sc = r * (0.5 + ((k * 7 + gi) % 5) * 0.12);
         sp.scale.set(sc, sc, 1);
-        sp.material.opacity = (0.26 + ((si + k * 2) % 3) * 0.07) * (0.35 + 0.65 * lifeFrac); // 快照带剩余生命 → 临近消散渐隐
+        sp.material.opacity = (0.20 + ((k * 3 + gi) % 4) * 0.05) * fade;
+        sp.material.rotation = smokeClock * 0.07 * (k % 2 ? 1 : -1);
       }
-    });
-    for (; idx < smokePool.length; idx++) smokePool[idx].visible = false;
-    for (let i = list.length; i < smokeSpherePool.length; i++) smokeSpherePool[i].visible = false;
+      // 边缘云絮：贴球面起伏 → 遮住球体硬边，形成云朵外缘
+      for (let k = 0; k < SMOKE_EDGE; k++) {
+        if (si >= smokePool.length) break;
+        const sp = smokePool[si++];
+        sp.visible = true;
+        const a = gi * 1.7 + k * 0.698; // 9 个绕球面均匀分布
+        sp.position.set(
+          s.x + Math.cos(a) * r * 0.96,
+          yc + Math.sin(k * 2.3 + smokeClock * 0.25 + gi) * r * 0.5,
+          s.z + Math.sin(a) * r * 0.96
+        );
+        const sc = r * 0.78;
+        sp.scale.set(sc, sc, 1);
+        sp.material.opacity = 0.42 * fade;
+        sp.material.rotation = -smokeClock * 0.09 + k;
+      }
+    }
+    const usedWalls = Math.min(renderList.length, smokeWallPool.length);
+    for (let i = usedWalls; i < smokeWallPool.length; i++) smokeWallPool[i].visible = false;
+    for (let i = usedWalls; i < smokeShellPool.length; i++) smokeShellPool[i].visible = false;
+    for (let i = usedWalls; i < smokeShell2Pool.length; i++) smokeShell2Pool[i].visible = false;
+    for (; si < smokePool.length; si++) smokePool[si].visible = false;
+
+    // —— 相机前烟絮板：烟内镜头前飘动的烟 ——
+    const st = Math.min(1, smokeStrength);
+    for (let i = 0; i < camSmokePool.length; i++) {
+      const q = camSmokePool[i];
+      if (st < 0.05) { q.visible = false; continue; }
+      q.visible = true;
+      const ph = smokeClock * (0.12 + i * 0.035) + i * 2.4;
+      q.position.set(
+        (i % 2 ? 0.55 : -0.5) * Math.sin(ph * 0.6),
+        (i % 3 ? -0.32 : 0.4) + Math.sin(ph) * 0.22,
+        -1.0 - i * 1.1
+      );
+      const scl = 4.2 + i * 2.0;
+      q.scale.set(scl, scl, 1);
+      q.material.opacity = st * (0.24 - i * 0.04);
+      q.material.rotation = ph * 0.16;
+    }
   }
 
   function buildPools() {
@@ -1206,6 +1426,7 @@ const Render = (function () {
       camera.rotation.z = (Math.random() - 0.5) * s;
     } else camera.rotation.z = 0;
     updateEffects(dt);
+    animateSmokes(dt);
     renderer.render(scene, camera);
   }
 
@@ -1219,12 +1440,21 @@ const Render = (function () {
 
   return {
     init, renderFrame, updatePlayers, tracer, impact, muzzleFlash, shell, flashAt, explosion, getCamera, flinch, updateNades, updateSmokes, updateHostages, updateCrates, setQuality, _debugCrates,
+    // 烟雾视界强度（main.js 用；测试用 _debugSmoke）
+    smokeStrength: () => smokeStrength,
     // 测试辅助
     _debugTracerTotal: () => _tracerTotal,
     _debugDrawCalls: () => renderer.info.render.calls,
     _debugTriangles: () => renderer.info.render.triangles,
     _debugShadowOn: () => renderer.shadowMap.enabled,
-    _debugSmokeSpheres: () => smokeSpherePool.filter(m => m.visible).length,
+    _debugSmoke: () => ({
+      walls: smokeWallPool.filter(m => m.visible).length,
+      shells: smokeShellPool.filter(m => m.visible).length,
+      sprites: smokePool.filter(m => m.visible).length,
+      strength: +smokeStrength.toFixed(2),
+      fogDensity: scene.fog === smokeFog ? +smokeFog.density.toFixed(3) : 0
+    }),
+    _debugSmokeSpheres: () => smokeWallPool.filter(m => m.visible).length,
     _debugArmor: () => {
       const out = {};
       for (const [id, m] of playerMeshes) {

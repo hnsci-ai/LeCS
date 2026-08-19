@@ -143,10 +143,17 @@ input, select, button { font-family: inherit; }
 #crosshair { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
 #ch-center { width: 4px; height: 4px; border-radius: 50%; background: rgba(120,255,150,.95); box-shadow: 0 0 3px #000; }
 
-/* AWP 狙击镜 */
+/* 烟雾视界：烟内屏幕蒙一层会缓慢漂动的灰雾（强度叠加在 3D 烟絮之上） */
 #smoke-overlay {
   position: absolute; inset: 0; pointer-events: none; z-index: 14;
-  background: radial-gradient(circle at 50% 50%, rgba(196,201,206,0.62) 0%, rgba(188,193,199,0.92) 70%, rgba(182,187,193,0.96) 100%);
+  background:
+    radial-gradient(circle at 50% 46%, rgba(206,210,214,0.30) 0%, rgba(198,203,208,0.42) 48%, rgba(188,194,200,0.55) 78%, rgba(182,188,194,0.62) 100%);
+  animation: smokeDrift 7s ease-in-out infinite alternate;
+}
+@keyframes smokeDrift {
+  0%   { transform: translate(-1.1%, -0.7%) scale(1.05); }
+  50%  { transform: translate(0.9%, 0.8%) scale(1.11); }
+  100% { transform: translate(-0.5%, 1.1%) scale(1.03); }
 }
 #scope-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 15; }
 .scope-vignette {
