@@ -367,6 +367,11 @@ const Main = (function () {
       for (const sh of snap.shots) {
         const x = sh[0], y = sh[1], z = sh[2], wid = sh[3], yaw = sh[5], pitch = sh[6] || 0;
         const hx = sh[7], hy = sh[8], hz = sh[9], kind = sh[10];
+        // 特殊子弹命中特效：燃烧 3 / 穿甲 4 / 破肢 5（仅命中玩家时区分）
+        const ammoT = sh[12] || '';
+        const effKind = (kind === 2 && ammoT === 'incendiary') ? 3
+          : (kind === 2 && ammoT === 'ap') ? 4
+          : (kind === 2 && ammoT === 'limb') ? 5 : kind;
         const d = S.sim ? Math.hypot(x - S.sim.x, z - S.sim.z) : 99;
         const own = d <= 2;
         const rel = S.sim ? Math.atan2(x - S.sim.x, z - S.sim.z) - S.sim.yaw : 0;
@@ -387,10 +392,10 @@ const Main = (function () {
             Render.tracer({ x, y, z }, { x: x + dx * 28, y: y + dy * 28, z: z + dz * 28 });
           }
           Render.muzzleFlash(x, y, z, yaw, pitch);
-          if (kind === 1 || kind === 2) Render.impact(hx, hy, hz, kind);
+          if (kind === 1 || kind === 2) Render.impact(hx, hy, hz, effKind);
         } else if (hx !== undefined && (kind === 1 || kind === 2)) {
-          // 自己的子弹：本地即时绘制曳光，服务器命中点补火花/血雾
-          Render.impact(hx, hy, hz, kind);
+          // 自己的子弹：本地即时绘制曳光，服务器命中点补火花/血雾（特种弹特效）
+          Render.impact(hx, hy, hz, effKind);
         }
         // 自己的刀命中（服务器确认）：血雾 + 命中声；重击带轻微镜头震动
         if (own && wid === 'knife' && hx !== undefined) {

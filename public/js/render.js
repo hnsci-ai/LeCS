@@ -950,7 +950,8 @@ const Render = (function () {
     });
     for (const g of smokeGhosts) {
       const f = Math.max(0, 1 - (nowT - g.t0) / 1200);
-      if (f > 0.02) renderList.push({ s: g, fade: f });
+      const cap = Math.min(1, g.life / 0.15); // 移除瞬间的浓度上限（消散不回头变浓）
+      if (f > 0.02) renderList.push({ s: g, fade: Math.min(f, cap) });
     }
     let si = 0, wi = 0, hi = 0;
     for (let gi = 0; gi < renderList.length && gi < SMOKE_MAX; gi++) {
@@ -1732,6 +1733,15 @@ const Render = (function () {
         } else {
           ud.torso.rotation.x = 0;
         }
+        // 燃烧弹灼烧火苗（每 4 帧一簇，从身上蹿起）
+        if (p[32]) {
+          m.burnT = (m.burnT || 0) - 1;
+          if (m.burnT <= 0) {
+            m.burnT = 4;
+            spawnBurst(p.x + (Math.random() - 0.5) * 0.3, p.y + 0.2 + Math.random() * 1.3, p.z + (Math.random() - 0.5) * 0.3,
+              { count: 3, color: 0xff7a2a, size: 0.055, speed: 1.4, life: 0.55, gravity: -1.8, upBias: 1.2, upSpeed: 0.9 });
+          }
+        }
         // 跑动尘土
         m.dustT = (m.dustT || 0) - 1;
         if (sp > 3.3 && m.dustT <= 0) {
@@ -1766,7 +1776,21 @@ const Render = (function () {
     if (kind === 2) {
       // 命中玩家：血雾
       spawnBurst(x, y, z, { count: 12, color: 0xb81f1f, size: 0.07, speed: 3.2, life: 0.45 });
-    } else {
+    }
+    if (kind === 3) {
+      // 燃烧弹命中：橙红火星 + 火舌
+      spawnBurst(x, y, z, { count: 14, color: 0xff6a1f, size: 0.06, speed: 3.6, life: 0.5 });
+      spawnBurst(x, y, z, { count: 7, color: 0xffd24a, size: 0.05, speed: 2.2, life: 0.38 });
+    }
+    if (kind === 4) {
+      // 穿甲弹命中：亮白火花
+      spawnBurst(x, y, z, { count: 12, color: 0xe8f4ff, size: 0.05, speed: 5.2, life: 0.3 });
+    }
+    if (kind === 5) {
+      // 破肢弹命中：骨白色碎屑
+      spawnBurst(x, y, z, { count: 10, color: 0xf5f0d8, size: 0.05, speed: 4.2, life: 0.34 });
+    }
+    if (kind <= 1) {
       // 命中墙面：火花 + 弹痕
       spawnBurst(x, y, z, { count: 10, color: 0xffc860, size: 0.045, speed: 4.2, life: 0.32 });
       scorchDecal(x, y, z);

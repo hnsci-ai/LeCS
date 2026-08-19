@@ -400,3 +400,12 @@ input, select, button { font-family: inherit; }
 }
 .rooms-foot button:hover { background: #d19a1c; }
 .rooms-hint { margin: 8px 0 0; font-size: 12px; color: #6f8398; text-align: center; }
+
+/* 当前特殊子弹徽章（燃烧橙 / 穿甲蓝 / 破肢骨白） */
+#ammo-special {
+  font-size: 12px; font-weight: 700; margin-top: 3px; padding: 2px 8px; border-radius: 4px;
+  display: inline-block; letter-spacing: 0.5px;
+}
+.ammo-incendiary { background: rgba(255, 106, 31, 0.25); color: #ff9d5c; border: 1px solid #ff6a1f; }
+.ammo-ap { background: rgba(150, 200, 255, 0.2); color: #bcd9ff; border: 1px solid #6fa8ff; }
+.ammo-limb { background: rgba(245, 240, 216, 0.15); color: #f0ead0; border: 1px solid #d8d0b0; }

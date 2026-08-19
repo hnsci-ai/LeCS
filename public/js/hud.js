@@ -14,6 +14,7 @@ const HUD = (function () {
     el.armorVal = $('armor-val'); el.armorFill = $('armor-fill');
     el.gearIcons = $('gear-icons');
     el.weaponName = $('weapon-name');
+    el.ammoSpecial = $('ammo-special');
     el.ammoMag = $('ammo-mag'); el.ammoRes = $('ammo-res');
     el.money = $('money');
     el.scoreT = $('score-t'); el.scoreCt = $('score-ct');
@@ -151,10 +152,18 @@ const HUD = (function () {
       const wdef2 = my[10] ? WEAPONS.W[my[10]] : null;
       const speedTag = (wdef2 && wdef2.moveSpeed && wdef2.moveSpeed < 0.99)
         ? '　移速 ' + Math.round(wdef2.moveSpeed * 100) + '%' : '';
-      // 特殊子弹状态：🔥燃烧 / 🛡穿甲 / 🦴破肢 + 剩余发数
-      const ammoIcons = { incendiary: '🔥', ap: '🛡', limb: '🦴' };
-      const ammoTag = (my[30] && ammoIcons[my[30]]) ? ('　' + ammoIcons[my[30]] + '×' + (my[31] || 0)) : '';
-      el.weaponName.textContent = wname + speedTag + ammoTag + (my[19] ? '（换弹中…）' : '');
+      el.weaponName.textContent = wname + speedTag + (my[19] ? '（换弹中…）' : '');
+      // 当前特殊子弹徽章（醒目显示：名称+剩余发数+颜色区分）
+      const ammoNames = { incendiary: '🔥 燃烧子弹', ap: '🛡 穿甲弹', limb: '🦴 破肢弹' };
+      if (el.ammoSpecial) {
+        if (my[30] && ammoNames[my[30]]) {
+          el.ammoSpecial.textContent = ammoNames[my[30]] + ' ×' + (my[31] || 0);
+          el.ammoSpecial.className = 'ammo-' + my[30];
+          el.ammoSpecial.classList.remove('hidden');
+        } else {
+          el.ammoSpecial.classList.add('hidden');
+        }
+      }
       el.ammoMag.textContent = my[11];
       el.ammoRes.textContent = my[12];
       el.money.textContent = '$' + my[13];

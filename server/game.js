@@ -852,7 +852,8 @@ class Game {
       +p.x.toFixed(2), +p.eye.toFixed(2), +p.z.toFixed(2),
       w.id, p.team, +p.yaw.toFixed(3), +p.pitch.toFixed(3),
       +hit.x.toFixed(1), +hit.y.toFixed(1), +hit.z.toFixed(1), hit.kind,
-      hit.victim || 0
+      hit.victim || 0,
+      p.ammoType || '' // 特殊子弹类型（客户端命中特效区分）
     ]);
   }
 
@@ -1596,7 +1597,8 @@ class Game {
         +p.planting.toFixed(2), +p.defusing.toFixed(2),
         p.ackSeq, +p.vx.toFixed(2), +p.vz.toFixed(2), p.spectator ? 1 : 0, p.scoped || 0,
         this.mode === 'armsrace' ? (p.armsLevel || 0) : 0,
-        p.ammoType || '', p.ammoShots || 0
+        p.ammoType || '', p.ammoShots || 0,
+        (p.burnUntil && p.burnUntil > Date.now()) ? 1 : 0 // 燃烧中（客户端火苗特效）
       ]);
     });
     return {
