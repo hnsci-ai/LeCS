@@ -1550,10 +1550,10 @@ const Render = (function () {
       // 烟雾遮挡（彻底版）：烟里的人整体不渲染 → 外面看不到烟里；
       // 相机在烟内时所有人不渲染 → 烟里看不到外面（不再有"黑影子"）
       if (smokeState.length) {
-        if (smokeStrength > 0.05) { m.group.visible = false; return; }
+        if (smokeStrength > 0.02) { m.group.visible = false; return; }
         let inSmoke = false;
         for (const s of smokeState) {
-          if (Math.hypot(p.x - s.x, p.z - s.z) < s.r * 0.95) { inSmoke = true; break; }
+          if (Math.hypot(p.x - s.x, p.z - s.z) < s.r) { inSmoke = true; break; }
         }
         if (inSmoke) { m.group.visible = false; return; }
       }
@@ -1912,6 +1912,15 @@ const Render = (function () {
     init, renderFrame, updatePlayers, tracer, impact, muzzleFlash, shell, flashAt, explosion, getCamera, flinch, updateNades, updateSmokes, updateHostages, updateCrates, updateBomb, barrelDestroyed, resetBarrels, setQuality, _debugCrates,
     // 烟雾视界强度（main.js 用；测试用 _debugSmoke）
     smokeStrength: () => smokeStrength,
+    // 烟雾是否遮挡某位置（雷达/模型共用：相机在烟内 → 全部遮挡；点在烟内 → 遮挡）
+    smokeHidesPoint: (x, z) => {
+      if (!smokeState.length) return false;
+      if (smokeStrength > 0.02) return true;
+      for (const s of smokeState) {
+        if (Math.hypot(x - s.x, z - s.z) < s.r) return true;
+      }
+      return false;
+    },
     // 测试辅助
     _debugTracerTotal: () => _tracerTotal,
     _debugDrawCalls: () => renderer.info.render.calls,

@@ -151,6 +151,8 @@ const dist = (a, b) => Math.sqrt((a.r - b.r) ** 2 + (a.g - b.g) ** 2 + (a.b - b.
   check(dOut > 60, '外面看不到烟里的 Bot（双层烟壳+云絮遮挡，像素距离>60）');
   const heads1 = await page.evaluate(() => Render._debugPlayerHeads());
   check(heads1.every(h => h.id !== botId), '烟里的 Bot 模型整体隐藏（不再有黑影子）');
+  const hidesBot = await page.evaluate(() => Render.smokeHidesPoint(0, -9));
+  check(hidesBot === true, '烟雾遮挡判定生效：烟内位置被遮蔽（3D 模型与雷达同时隐藏）');
   // 烟体本身不透明：烟内非人物区域的背景（场边墙/天空）也应为烟灰色
   const cloudPixel = await page.evaluate(() => {
     const c = document.getElementById('gl');
@@ -180,6 +182,8 @@ const dist = (a, b) => Math.sqrt((a.r - b.r) ** 2 + (a.g - b.g) ** 2 + (a.b - b.
     '烟内画面呈灰烟色（外面世界被烟墙+雾遮住）');
   const heads2 = await page.evaluate(() => Render._debugPlayerHeads());
   check(heads2.length === 0, '相机在烟内时所有人物模型隐藏（烟里看不到外面的人）');
+  const hidesAny = await page.evaluate(() => Render.smokeHidesPoint(0, 10)); // 场外任意位置
+  check(hidesAny === true, '相机在烟内：雷达同样不显示任何敌人');
 
   check(errors.length === 0, '无 JS 错误' + (errors.length ? ': ' + errors[0].slice(0, 150) : ''));
   await browser.close();

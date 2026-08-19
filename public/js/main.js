@@ -944,9 +944,10 @@ const Main = (function () {
     if (S.sim) {
       S.radarTick = (S.radarTick || 0) + 1;
       if (S.radarTick % 5 === 0) { // 12Hz 重绘，减少每帧 2D 开销
+        // 雷达同样受烟雾遮挡：烟里的人/自己在烟里时，不显示人物点
         HUD.updateRadar(
           { x: S.sim.x, z: S.sim.z }, S.sim.yaw,
-          Array.from(players.values()).filter(p => p.id !== S.myId),
+          Array.from(players.values()).filter(p => p.id !== S.myId && !Render.smokeHidesPoint(p.x, p.z)),
           snap ? snap.bomb : null,
           snap ? snap.hostages : null
         );
