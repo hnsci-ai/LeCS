@@ -76,21 +76,34 @@ wss.on('connection', (ws) => {
     try { msg = JSON.parse(raw.toString()); } catch (e) { return; }
     if (!msg || !msg.t) return;
 
+    if (msg.t === 'rooms') {
+      // 房间列表（大厅浏览用）：无需加入即可查询
+      ws.send(JSON.stringify({
+        t: 'rooms',
+        rooms: [...rooms.values()].map(r => ({
+          code: r.code, mode: r.mode, map: r.map,
+          players: r.players.size, max: C.MAX_PLAYERS, phase: r.phase
+        }))
+      }));
+      return;
+    }
+
     if (msg.t === 'join') {
       if (player) return;
       const name = String(msg.name || '玩家').slice(0, 16);
       const MODES = { classic: 'classic', dm: 'dm', hostage: 'hostage', armsrace: 'armsrace', test: 'test' };
-      const mode = MODES[msg.mode] || 'classic';
+      let mode = MODES[msg.mode] || 'classic';
       let room = msg.code ? rooms.get(String(msg.code).toUpperCase()) : null;
-      if (room && room.mode !== mode) {
-        ws.send(JSON.stringify({ t: 'error', text: '该房间模式不匹配（' + room.mode + '）' }));
-        return;
+      if (room) {
+        // 加入已有房间：自动匹配房间的模式/地图（无需客户端选择一致）
+        mode = room.mode;
+        if (room.players.size >= C.MAX_PLAYERS) {
+          ws.send(JSON.stringify({ t: 'error', text: '房间已满（最多 ' + C.MAX_PLAYERS + ' 人）' }));
+          return;
+        }
+      } else {
+        room = createRoom(mode, msg.map);
       }
-      if (room && room.players.size >= C.MAX_PLAYERS) {
-        ws.send(JSON.stringify({ t: 'error', text: '房间已满（最多 ' + C.MAX_PLAYERS + ' 人）' }));
-        return;
-      }
-      if (!room) room = createRoom(mode, msg.map);
       game = room;
       player = game.addPlayer(ws, name, msg.team || 'auto');
       ws.send(JSON.stringify({

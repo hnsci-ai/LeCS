@@ -64,7 +64,7 @@
       <button id="btn-practice" class="primary">单人对战电脑</button>
       <button id="btn-create">创建房间（联机）</button>
       <div class="join-row">
-        <input id="code" maxlength="4" placeholder="房间码" autocomplete="off" spellcheck="false">
+        <input id="code" maxlength="4" placeholder="房间码（留空浏览房间列表）" autocomplete="off" spellcheck="false">
         <button id="btn-join">加入房间</button>
       </div>
     </div>
@@ -73,6 +73,25 @@
       <b>操作说明</b><br>
       WASD 移动 · 鼠标左键射击 / 右键刀刺 · Shift 静步 · Ctrl 蹲 · 空格跳<br>
       R 换弹 · B 买枪 · E 埋包/拆弹 · Tab 记分板 · 1-5 切武器 · F3/F4 增删Bot
+    </div>
+  </div>
+
+  <!-- 房间列表（点「加入房间」且未填房间码时弹出；双击/点加入直接进房，模式自动匹配） -->
+  <div id="rooms-panel" class="hidden">
+    <div class="rooms-box">
+      <div class="rooms-head">
+        <b>房间列表</b>
+        <span id="rooms-count"></span>
+        <span class="rooms-spacer"></span>
+        <button id="rooms-refresh">刷新</button>
+        <button id="rooms-close">✕</button>
+      </div>
+      <div id="rooms-list"></div>
+      <div class="rooms-foot">
+        <input id="rooms-code" maxlength="4" placeholder="输入 4 位房间码" autocomplete="off" spellcheck="false">
+        <button id="rooms-join-code">直接进入</button>
+      </div>
+      <p class="rooms-hint">点击选中房间 · 双击或点「加入」直接进入（模式/地图自动匹配）</p>
     </div>
   </div>
 </div>

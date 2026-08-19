@@ -58,9 +58,104 @@ const Main = (function () {
     document.getElementById('btn-create').addEventListener('click', () => start({ code: null, bots: 0 }));
     document.getElementById('btn-join').addEventListener('click', () => {
       const code = document.getElementById('code').value.trim().toUpperCase();
-      if (!code) { lobbyMsg('请输入房间码'); return; }
-      start({ code, bots: 0 });
+      if (code) { start({ code, bots: 0 }); return; } // 填了房间码 → 直接进入
+      openRoomsPanel(); // 未填 → 浏览房间列表
     });
+    // —— 房间列表面板 ——
+    const roomsPanel = document.getElementById('rooms-panel');
+    document.getElementById('rooms-close').addEventListener('click', closeRoomsPanel);
+    document.getElementById('rooms-refresh').addEventListener('click', fetchRooms);
+    document.getElementById('rooms-join-code').addEventListener('click', () => {
+      const code = document.getElementById('rooms-code').value.trim().toUpperCase();
+      if (!code) { lobbyMsg('请输入 4 位房间码'); return; }
+      joinRoom(code);
+    });
+    document.getElementById('rooms-code').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const code = document.getElementById('rooms-code').value.trim().toUpperCase();
+        if (code) joinRoom(code);
+      }
+    });
+  }
+
+  // ---------- 房间列表（浏览/双击加入，模式自动匹配） ----------
+  const MODE_NAMES = { classic: '经典爆破', dm: '死斗', hostage: '人质营救', armsrace: '军备竞赛', test: '测试靶场' };
+  const MAP_NAMES = { dust: '仓库', dust2: '沙漠二', arms: '军备竞技场', test: '测试靶场', cross: '十字路口', lanes: '双道突袭' };
+  const PHASE_NAMES = { freeze: '购买时间', live: '对战中', end: '结算中' };
+  let roomsTimer = null;
+  let roomsSelected = null;
+
+  function openRoomsPanel() {
+    document.getElementById('rooms-panel').classList.remove('hidden');
+    fetchRooms();
+    if (!roomsTimer) roomsTimer = setInterval(fetchRooms, 3000); // 面板打开时每 3 秒刷新
+  }
+  function closeRoomsPanel() {
+    document.getElementById('rooms-panel').classList.add('hidden');
+    if (roomsTimer) { clearInterval(roomsTimer); roomsTimer = null; }
+  }
+  function fetchRooms() {
+    const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
+    let ws;
+    let done = false;
+    try { ws = new WebSocket(proto + location.host); } catch (e) { renderRooms(null); return; }
+    const finish = (list) => { if (!done) { done = true; try { ws.close(); } catch (e) {} renderRooms(list); } };
+    ws.onopen = () => ws.send(JSON.stringify({ t: 'rooms' }));
+    ws.onmessage = (e) => {
+      try {
+        const m = JSON.parse(e.data);
+        if (m.t === 'rooms') finish(m.rooms || []);
+      } catch (err) { /* ignore */ }
+    };
+    ws.onerror = () => finish(null);
+    setTimeout(() => finish(null), 3000);
+  }
+  function renderRooms(list) {
+    const el = document.getElementById('rooms-list');
+    const count = document.getElementById('rooms-count');
+    if (!list) {
+      count.textContent = '';
+      el.innerHTML = '<div class="rooms-empty">无法连接服务器，请稍后重试</div>';
+      return;
+    }
+    if (!list.length) {
+      roomsSelected = null;
+      count.textContent = '（0 个房间）';
+      el.innerHTML = '<div class="rooms-empty">当前没有进行中的房间<br>点击「创建房间」开一局，把房间码发给好友</div>';
+      return;
+    }
+    count.textContent = '（' + list.length + ' 个房间）';
+    el.innerHTML = '';
+    list.forEach(r => {
+      const row = document.createElement('div');
+      row.className = 'room-row' + (roomsSelected === r.code ? ' selected' : '');
+      const full = r.players >= r.max;
+      row.innerHTML =
+        '<span class="room-code">' + r.code + '</span>' +
+        '<span class="room-mode">' + (MODE_NAMES[r.mode] || r.mode) + '</span>' +
+        '<span class="room-map">' + (MAP_NAMES[r.map] || r.map) + '</span>' +
+        '<span class="room-bar"><span class="room-bar-inner" style="width:' + Math.round(r.players / r.max * 100) + '%"></span></span>' +
+        '<span class="room-num">' + r.players + '/' + r.max + '</span>' +
+        '<span class="room-phase ' + (r.phase === 'live' ? 'live' : '') + '">' + (PHASE_NAMES[r.phase] || '') + '</span>' +
+        '<button class="room-join' + (full ? ' disabled' : '') + '"' + (full ? ' disabled' : '') + '>加入</button>';
+      row.addEventListener('click', () => {
+        roomsSelected = r.code;
+        row.parentElement.querySelectorAll('.room-row').forEach(x => x.classList.remove('selected'));
+        row.classList.add('selected');
+      });
+      row.addEventListener('dblclick', () => { if (!full) joinRoom(r.code, r.mode); });
+      row.querySelector('.room-join').addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!full) joinRoom(r.code, r.mode);
+      });
+      el.appendChild(row);
+    });
+  }
+  function joinRoom(code, roomMode) {
+    closeRoomsPanel();
+    lobbyMsg('正在加入房间 ' + code + ' …');
+    // 从列表带入房间模式：若房间已消失则按该模式新建（服务器对已有房间自动匹配模式）
+    start({ code, bots: 0, mode: roomMode || undefined });
   }
 
   function lobbyMsg(text) { document.getElementById('lobby-msg').textContent = text; }
@@ -68,7 +163,7 @@ const Main = (function () {
   function start(opts) {
     Audio.resume(); // 在按钮点击的手势中立即创建/恢复音频
     const name = document.getElementById('nick').value.trim() || '玩家';
-    const mode = document.getElementById('mode').value;
+    const mode = opts.mode || document.getElementById('mode').value;
     const team = document.getElementById('team').value;
     S.botDiff = opts.diff || 'normal';
     lobbyMsg('正在连接服务器…');
