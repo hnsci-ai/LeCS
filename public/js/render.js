@@ -398,7 +398,6 @@ const Render = (function () {
     bagMap.colorSpace = THREE.SRGBColorSpace;
     const bagMat = new THREE.MeshPhongMaterial({ map: bagMap, shininess: 10, specular: 0x333333 });
     const blockMat = new THREE.MeshPhongMaterial({ color: 0x8d9299, shininess: 14, specular: 0x4a4f55 });
-    const barrelMat = new THREE.MeshPhongMaterial({ color: 0xb34a3a, shininess: 32, specular: 0x6a3a30 });
     const bags = covers.filter(c => c.cover === 'sandbag');
     const blocks = covers.filter(c => c.cover === 'block');
     const barrels = covers.filter(c => c.cover === 'barrel');
@@ -417,8 +416,25 @@ const Render = (function () {
     }
     addCoverMesh(bags, new THREE.BoxGeometry(1, 1, 1), bagMat);
     addCoverMesh(blocks, new THREE.BoxGeometry(1, 1, 1), blockMat);
-    addCoverMesh(barrels, new THREE.CylinderGeometry(0.5, 0.5, 1, 10), barrelMat);
     addCoverMesh(talls, new THREE.BoxGeometry(1, 1, 1), blockMat); // 高过人掩体（2.2m 混凝土墩）
+    // 油桶单独实例化（可被打爆：单个实例变色/压扁）
+    if (barrels.length) {
+      const bMat = new THREE.MeshPhongMaterial({ color: 0xb34a3a, vertexColors: true, shininess: 32, specular: 0x6a3a30 });
+      barrelIMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.5, 0.5, 1, 10), bMat, barrels.length);
+      barrels.forEach((w, i) => {
+        const dx = w.x2 - w.x1, dy = w.y2 - w.y1, dz = w.z2 - w.z1;
+        m4.makeScale(Math.max(0.01, dx), dy, Math.max(0.01, dz));
+        m4.setPosition((w.x1 + w.x2) / 2, (w.y1 + w.y2) / 2, (w.z1 + w.z2) / 2);
+        barrelIMesh.setMatrixAt(i, m4);
+        barrelIMesh.setColorAt(i, new THREE.Color(0xffffff));
+      });
+      barrelIMesh.castShadow = true;
+      barrelIMesh.receiveShadow = true;
+      barrelIMesh.instanceMatrix.needsUpdate = true;
+      if (barrelIMesh.instanceColor) barrelIMesh.instanceColor.needsUpdate = true;
+      scene.add(barrelIMesh);
+      barrelList = barrels;
+    }
 
     // 墙根环境阴影（视觉接地）
     const aoBoxes = MAPDATA.walls.filter(w => w.y1 < 0.01 && !w.cover);
@@ -547,6 +563,33 @@ const Render = (function () {
   let bombGroup = null;
   let bombLed = null;
   let bombPlanted = false;
+  // ---------- 油桶（可被打爆：爆炸后焦黑压扁，回合重置） ----------
+  let barrelIMesh = null;
+  let barrelList = [];
+  function barrelDestroyed(id) {
+    if (!barrelIMesh || !barrelList[id]) return;
+    const w = barrelList[id];
+    const m = new THREE.Matrix4();
+    m.makeScale(0.72, 0.8, 0.72); // 炸后残骸：压扁
+    m.setPosition((w.x1 + w.x2) / 2, (w.y1 + w.y2) / 2 * 0.8, (w.z1 + w.z2) / 2);
+    barrelIMesh.setMatrixAt(id, m);
+    barrelIMesh.setColorAt(id, new THREE.Color(0x1c1c1c)); // 焦黑
+    barrelIMesh.instanceMatrix.needsUpdate = true;
+    if (barrelIMesh.instanceColor) barrelIMesh.instanceColor.needsUpdate = true;
+  }
+  function resetBarrels() {
+    if (!barrelIMesh) return;
+    const m = new THREE.Matrix4();
+    barrelList.forEach((w, i) => {
+      const dx = w.x2 - w.x1, dy = w.y2 - w.y1, dz = w.z2 - w.z1;
+      m.makeScale(Math.max(0.01, dx), dy, Math.max(0.01, dz));
+      m.setPosition((w.x1 + w.x2) / 2, (w.y1 + w.y2) / 2, (w.z1 + w.z2) / 2);
+      barrelIMesh.setMatrixAt(i, m);
+      barrelIMesh.setColorAt(i, new THREE.Color(0xffffff));
+    });
+    barrelIMesh.instanceMatrix.needsUpdate = true;
+    if (barrelIMesh.instanceColor) barrelIMesh.instanceColor.needsUpdate = true;
+  }
   function buildBombModel() {
     const g = new THREE.Group();
     // 军绿色炸药砖（CS 经典配色）
@@ -1850,7 +1893,7 @@ const Render = (function () {
   function getCamera() { return camera; }
 
   return {
-    init, renderFrame, updatePlayers, tracer, impact, muzzleFlash, shell, flashAt, explosion, getCamera, flinch, updateNades, updateSmokes, updateHostages, updateCrates, updateBomb, setQuality, _debugCrates,
+    init, renderFrame, updatePlayers, tracer, impact, muzzleFlash, shell, flashAt, explosion, getCamera, flinch, updateNades, updateSmokes, updateHostages, updateCrates, updateBomb, barrelDestroyed, resetBarrels, setQuality, _debugCrates,
     // 烟雾视界强度（main.js 用；测试用 _debugSmoke）
     smokeStrength: () => smokeStrength,
     // 测试辅助
@@ -1868,6 +1911,14 @@ const Render = (function () {
     _debugSmokeSpheres: () => smokeWallPool.filter(m => m.visible).length,
     _debugBomb: () => ({ visible: !!(bombGroup && bombGroup.visible), planted: bombPlanted }),
     _debugBombLed: () => !!(bombLed && bombLed.visible),
+    _debugBarrel: (i) => {
+      if (!barrelIMesh) return null;
+      const c = new THREE.Color();
+      barrelIMesh.getColorAt(i, c);
+      const m = new THREE.Matrix4();
+      barrelIMesh.getMatrixAt(i, m);
+      return { r: +c.r.toFixed(2), g: +c.g.toFixed(2), scaleX: +m.elements[0].toFixed(2), posY: +m.elements[13].toFixed(2) };
+    },
     _debugPost: () => ({ on: !!postRT, active: !!(postRT && !lowQuality) }),
     _debugSetL2S: (v) => { if (postMat) postMat.uniforms.uL2S.value = v ? 1 : 0; return v; },
     // 玩家头部结构诊断（守护"头必须挂在人物组里"，曾漏 add 导致无头）

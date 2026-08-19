@@ -597,6 +597,7 @@ const Main = (function () {
           HUD.showBanner('第 ' + ev.round + ' 回合', 'ct');
           Audio.roundStart();
           Ragdoll.clearAll(); // 每个回合开始清除场上尸体
+          Render.resetBarrels(); // 油桶每回合重置（可被打爆）
         } else if (ev.event === 'live') {
           HUD.showBanner('行动开始！', 'ct');
           Audio.roundStart();
@@ -615,6 +616,11 @@ const Main = (function () {
           Render.explosion(ev.x, ev.y + 0.5, ev.z);
         }
         if (ev.event === 'drop') HUD.showMessage('C4 已掉落');
+        break;
+      case 'barrel':
+        // 油桶：中弹火花+金属声；打爆 → 爆炸特效+焦黑残骸
+        if (ev.event === 'hit') { Render.impact(ev.x, ev.y, ev.z, 1); Audio.shellTink(); }
+        if (ev.event === 'explode') { Audio.explosion(); Render.explosion(ev.x, ev.y + 0.2, ev.z); Render.barrelDestroyed(ev.id); }
         break;
       case 'nade':
         if (ev.event === 'explode') {

@@ -53,6 +53,8 @@ class Game {
     this.bomb = { state: C.BOMB_HIDDEN, carrier: null, x: 0, y: 0, z: 0, site: null, timeLeft: C.BOMB_TIME };
     this.nades = [];
     this.smokes = [];    // 烟雾弹烟团 [{x,y,z,r,born,life,growUntil}]
+    this.barrels = [];
+    this.initBarrels();
     this.hostages = [];  // 人质营救模式 [{id,x,y,z,yaw,state:'idle'|'follow',leader}]
     this.rescued = 0;
     this.crates = [];    // 死亡战利品箱 [{id,x,y,z,weapons,grenades,money}]
@@ -285,6 +287,7 @@ class Game {
     this.nades = [];
     this.smokes = [];
     this.crates = [];
+    this.initBarrels(); // 每回合油桶重置（可被打爆）
     // 人质营救：刷新 4 名人质
     this.hostages = [];
     this.rescued = 0;
@@ -835,7 +838,7 @@ class Game {
     const ox = p.x, oy = p.eye, oz = p.z;
     const RANGE = 200;
 
-    // 收集所有可能命中
+    // 收集所有可能命中（玩家 + 油桶）
     const hits = [];
     const now = this.tickCount;
     this.players.forEach(v => {
@@ -851,10 +854,21 @@ class Game {
       if (bestT < 0) return;
       hits.push({ p: v, dist: bestT, part: bestPart });
     });
+    this.barrels.forEach((b, i) => {
+      if (b.destroyed) return;
+      const t = this.mapData.segBox(ox, oy, oz, dir.x, dir.y, dir.z, b.box);
+      if (t >= 0 && t <= RANGE) hits.push({ barrel: i, dist: t });
+    });
     hits.sort((a, b) => a.dist - b.dist);
 
     let result = null;
     for (const h of hits) {
+      if (h.barrel !== undefined) {
+        // 命中油桶：子弹被桶挡下（打不到后面的人）
+        this.damageBarrel(h.barrel, def.dmg, p);
+        result = { x: ox + dir.x * h.dist, y: oy + dir.y * h.dist, z: oz + dir.z * h.dist, kind: 1 };
+        break;
+      }
       // 墙体穿透检测
       const wallHits = [];
       for (const wbox of this.mapData.walls) {
@@ -876,9 +890,19 @@ class Game {
       break; // 子弹只命中一人
     }
     if (!result) {
-      // 未命中任何目标：找命中墙面或射程终点
+      // 未命中任何目标：找最近的油桶 / 墙面 / 射程终点
       const rc = this.mapData.raycast(ox, oy, oz, dir.x, dir.y, dir.z, 60, 0.02);
-      if (rc.blocked) {
+      let hitDist = rc.blocked ? rc.dist : 60;
+      let barrelHit = -1;
+      this.barrels.forEach((b, i) => {
+        if (b.destroyed) return;
+        const t = this.mapData.segBox(ox, oy, oz, dir.x, dir.y, dir.z, b.box);
+        if (t >= 0 && t < hitDist) { hitDist = t; barrelHit = i; }
+      });
+      if (barrelHit >= 0) {
+        this.damageBarrel(barrelHit, def.dmg, p);
+        result = { x: ox + dir.x * hitDist, y: oy + dir.y * hitDist, z: oz + dir.z * hitDist, kind: 1 };
+      } else if (rc.blocked) {
         result = { x: ox + dir.x * rc.dist, y: oy + dir.y * rc.dist, z: oz + dir.z * rc.dist, kind: 1 };
       } else {
         result = { x: ox + dir.x * 60, y: oy + dir.y * 60, z: oz + dir.z * 60, kind: 0 };
@@ -1099,6 +1123,12 @@ class Game {
       // CS 1.6：手雷无视护甲
       this.applyDamage(v, n.owner, { dmg: dmg, armorPen: 1 }, 1, d, 1, 'hegrenade');
     });
+    // 手雷引爆附近油桶
+    this.barrels.forEach((b, i) => {
+      if (b.destroyed) return;
+      const d = Math.hypot(b.x - n.x, b.z - n.z);
+      if (d < radius) this.damageBarrel(i, W.hegrenade.dmg, n.owner);
+    });
   }
 
   // 闪光弹：正对闪光且无遮挡的玩家致盲（视野白屏 + Bot 无法索敌）
@@ -1153,6 +1183,44 @@ class Game {
       s.x += Math.sin(now / 900 + i) * 0.002;
       s.z += Math.cos(now / 1100 + i) * 0.002;
     }
+  }
+
+  // ---------- 油桶（可射击打爆） ----------
+  initBarrels() {
+    this.barrels = (this.mapData.covers || []).filter(c => c.cover === 'barrel').map(c => ({
+      x: (c.x1 + c.x2) / 2, z: (c.z1 + c.z2) / 2,
+      box: { x1: c.x1, y1: c.y1, z1: c.z1, x2: c.x2, y2: c.y2, z2: c.z2 },
+      hp: 45, destroyed: false
+    }));
+  }
+  damageBarrel(i, dmg, attacker) {
+    const b = this.barrels[i];
+    if (!b || b.destroyed) return;
+    b.hp -= dmg;
+    this.emitEvent({ type: 'barrel', event: 'hit', id: i, x: b.x, y: 0.6, z: b.z });
+    if (b.hp <= 0) this.explodeBarrel(i, attacker);
+  }
+  explodeBarrel(i, attacker) {
+    const b = this.barrels[i];
+    if (!b || b.destroyed) return;
+    b.destroyed = true;
+    this.emitEvent({ type: 'barrel', event: 'explode', id: i, x: b.x, y: 0.6, z: b.z });
+    // 范围伤害：4.5 米内按距离衰减（可穿墙削减）
+    this.players.forEach(v => {
+      if (!v.alive) return;
+      const dx = v.x - b.x, dz = v.z - b.z;
+      const d = Math.sqrt(dx * dx + dz * dz);
+      if (d > 4.5) return;
+      const los = this.mapData.losClear(b.x, 0.8, b.z, v.x, v.eye, v.z, 0.15);
+      const dmg = Math.round(95 * (1 - d / 4.5) * (los ? 1 : 0.4));
+      if (dmg > 0) this.applyDamage(v, attacker, { dmg, armorPen: 0.75 }, 1, d, 1, 'barrel');
+    });
+    // 连锁引爆邻近油桶
+    this.barrels.forEach((bb, j) => {
+      if (j === i || bb.destroyed) return;
+      const dd = Math.hypot(bb.x - b.x, bb.z - b.z);
+      if (dd < 2.2) this.explodeBarrel(j, attacker);
+    });
   }
 
   // ---------- C4 ----------
