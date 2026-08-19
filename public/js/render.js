@@ -1191,8 +1191,8 @@ const Render = (function () {
         break;
       }
     }
-    // 握持位：双手前伸位置（相对玩家组原点）
-    g.position.set(0, 1.14, 0.24);
+    // 握持位：挂在胸前枪枢轴（buildPlayerModel 的 gunHold）上
+    g.position.set(0, 0, 0);
     g.traverse(o => { if (o.isMesh) o.castShadow = true; });
     thirdGunCache.set(id, g);
     return g;
@@ -1228,22 +1228,29 @@ const Render = (function () {
     const dark = new THREE.MeshPhongMaterial({ map: fabricTexture(), color: team === GAMECONST.TEAM_T ? 0x8a5a28 : 0x35506e, shininess: 12, specular: 0x2a2a2a });
     const boot = new THREE.MeshPhongMaterial({ color: 0x2e2a24, shininess: 18, specular: 0x3a3a3a });
 
-    // 腿：髋部枢轴（从髋关节摆动）+ 大腿圆柱 + 朝前的靴子
+    // 两段式腿：髋部枢轴 + 大腿 + 膝部枢轴 + 小腿 + 靴子（走路带膝弯）
     function makeLeg(x) {
-      const pivot = new THREE.Group();
-      pivot.position.set(x, 0.73, 0);
-      const thigh = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.62, 8), dark);
-      thigh.position.y = -0.27;
-      const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.07, 0.16, 8), boot);
-      foot.position.set(0, -0.64, 0.05);
+      const hip = new THREE.Group();
+      hip.position.set(x, 0.73, 0);
+      const thigh = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.075, 0.34, 8), dark);
+      thigh.position.y = -0.15;
+      hip.add(thigh);
+      const knee = new THREE.Group();
+      knee.position.y = -0.32;
+      hip.add(knee);
+      const calf = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.06, 0.3, 8), dark);
+      calf.position.y = -0.17;
+      knee.add(calf);
+      const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.065, 0.16, 8), boot);
+      foot.position.set(0, -0.36, 0.05);
       foot.rotation.x = Math.PI / 2; // 圆柱横放 → 靴子朝前
-      pivot.add(thigh, foot);
-      g.add(pivot);
-      return pivot;
+      knee.add(foot);
+      g.add(hip);
+      return { hip, knee };
     }
     const legL = makeLeg(-0.1);
     const legR = makeLeg(0.1);
-    // 躯干（椭圆柱）+ 脖子
+    // 躯干（椭圆柱）+ 脖子 + 头
     const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.225, 0.2, 0.66, 12), cloth);
     torso.position.set(0, 1.02, 0);
     torso.scale.z = 0.62; // 侧面压薄，接近原盒型厚度
@@ -1266,6 +1273,26 @@ const Render = (function () {
     }
     const armL = makeArm(-0.3);
     const armR = makeArm(0.3);
+    // 团队造型：T 系头巾，CT 戴便帽（买头盔后便帽隐藏、头巾保留）
+    const bandMat = team === GAMECONST.TEAM_T
+      ? new THREE.MeshPhongMaterial({ color: 0x3a2c1c, shininess: 10, specular: 0x2a2a2a })
+      : new THREE.MeshPhongMaterial({ color: 0x2c4666, shininess: 14, specular: 0x3a4a5a });
+    let cap = null, headband = null;
+    if (team === GAMECONST.TEAM_T) {
+      headband = new THREE.Mesh(new THREE.TorusGeometry(0.125, 0.022, 6, 14), bandMat);
+      headband.position.set(0, 1.5, 0);
+      headband.rotation.x = Math.PI / 2;
+      g.add(headband);
+    } else {
+      cap = new THREE.Group();
+      const capTop = new THREE.Mesh(new THREE.CylinderGeometry(0.135, 0.14, 0.07, 12), bandMat);
+      capTop.position.y = 0.05;
+      const brim = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.015, 0.15), bandMat);
+      brim.position.set(0, 0.015, 0.15);
+      cap.add(capTop, brim);
+      cap.position.set(0, 1.6, 0);
+      g.add(cap);
+    }
     // 防弹衣背心与头盔（默认隐藏，购买后显示）
     const kevlarMat = new THREE.MeshPhongMaterial({ color: 0x4a5246, shininess: 32, specular: 0x4a5450 });
     const vest = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.68, 12), kevlarMat);
@@ -1276,9 +1303,17 @@ const Render = (function () {
     helm.position.set(0, 1.6, 0);
     helm.scale.y = 0.85;
     helm.visible = false;
+    // 持枪枢轴：枪挂在胸前，随手臂摆动与躯干起伏轻微晃动（像握在手上）
+    const gunHold = new THREE.Group();
+    gunHold.position.set(0, 1.14, 0.26);
+    g.add(gunHold);
 
-    g.add(legL, legR, torso, neck, head, armL, armR, vest, helm);
-    g.userData = { legL, legR, armL, armR, torso, head, vest, helm, walkPhase: 0, dead: 0 };
+    g.add(vest, helm);
+    g.userData = {
+      legL: legL.hip, legR: legR.hip, kneeL: legL.knee, kneeR: legR.knee,
+      armL, armR, torso, head, vest, helm, cap, headband, gunHold,
+      walkPhase: 0, dead: 0
+    };
     g.castShadow = true;
     g.traverse(o => { if (o.isMesh) { o.castShadow = true; } });
     return g;
@@ -1307,12 +1342,12 @@ const Render = (function () {
       if (p.id === myId) { m.group.visible = false; return; } // 自己由第一人称视角呈现
       const g = m.group;
       g.visible = true;
-      // 同步第三人称持枪模型（按当前武器切换）
+      // 同步第三人称持枪模型（按当前武器切换，挂在胸前枪枢轴上随身体晃动）
       const wid = p.weapon || '';
       if (m.gunWeapon !== wid) {
-        if (m.gun) g.remove(m.gun);
+        if (m.gun) g.userData.gunHold.remove(m.gun);
         m.gun = buildThirdGun(wid);
-        if (m.gun) g.add(m.gun);
+        if (m.gun) g.userData.gunHold.add(m.gun);
         m.gunWeapon = wid;
       }
       if (p.alive) {
@@ -1324,10 +1359,11 @@ const Render = (function () {
         g.rotation.set(0, p.yaw, 0);
         const scale = p.crouch ? 0.72 : 1;
         g.scale.set(scale, scale, scale);
-        // 护甲外观：有防弹衣显示背心，戴头盔显示头盔
+        // 护甲外观：有防弹衣显示背心，戴头盔显示头盔（CT 便帽被头盔盖住）
         const ud0 = g.userData;
         ud0.vest.visible = (p.armor || 0) > 0;
         ud0.helm.visible = !!p.helmet;
+        if (ud0.cap) ud0.cap.visible = !p.helmet;
         const sp = Math.hypot(m.vel.x, m.vel.z);
         m.vel.x += (p.vx - m.vel.x) * 0.3; m.vel.z += (p.vz - m.vel.z) * 0.3;
         // 时间基准步态（帧率无关，约 2.9 步/秒）
@@ -1337,10 +1373,16 @@ const Render = (function () {
         const ud = g.userData;
         ud.legL.rotation.x = swing;
         ud.legR.rotation.x = -swing;
+        // 膝弯：腿向前摆时小腿自然弯曲，向后摆时伸直
+        ud.kneeL.rotation.x = Math.max(0, swing) * 0.6;
+        ud.kneeR.rotation.x = Math.max(0, -swing) * 0.6;
         ud.armL.rotation.x = -swing * 0.45;
         ud.armR.rotation.x = swing * 0.45;
         // 走路躯干轻微起伏（腿从髋部摆，身体随步频上下颠）
         ud.torso.position.y = 1.02 + Math.abs(Math.sin(ph)) * 0.03;
+        // 枪随手臂平均摆动与躯干起伏轻微晃动 → 像握在手上
+        ud.gunHold.position.y = 1.14 + Math.abs(Math.sin(ph)) * 0.03;
+        ud.gunHold.rotation.x = (ud.armL.rotation.x + ud.armR.rotation.x) * 0.12;
         // 受击踉跄（躯干后仰）
         if (m.flinch > 0) {
           m.flinch -= 0.14;

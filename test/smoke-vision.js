@@ -99,10 +99,10 @@ const dist = (a, b) => Math.sqrt((a.r - b.r) ** 2 + (a.g - b.g) ** 2 + (a.b - b.
     return out.join(' ');
   }, xfrac);
 
-  // 1. 无烟时：屏幕中心是 Bot —— 验证参照
+  // 1. 无烟时：屏幕中心是 Bot —— 验证参照（Bot 现戴便帽/头巾，头部像素偏暗，放宽阈值）
   const p0 = await centerPixel();
   console.log('  无烟时中心像素:', JSON.stringify(p0), '· 网格:', await gridInfo());
-  check(p0 && p0.r + p0.g + p0.b > 100, '无烟时屏幕中心有内容（Bot 参照）');
+  check(p0 && p0.r + p0.g + p0.b > 60, '无烟时屏幕中心有内容（Bot 参照）');
   await page.screenshot({ path: 'test/artifacts/smoke-01-outside-no-smoke.png' });
 
   // 2. 掷烟员到 (0,-2) 朝 -z 投烟雾弹（落点约 (0,-10)，盖住 Bot），投完立即退回场外
