@@ -538,11 +538,11 @@ const Render = (function () {
       g.clearRect(0, 0, w, h);
       // 基底：上下（球极方向）渐隐，中间高 alpha
       const base = g.createLinearGradient(0, 0, 0, h);
-      base.addColorStop(0, 'rgba(190,196,202,0.25)');
-      base.addColorStop(0.22, 'rgba(210,215,219,0.85)');
-      base.addColorStop(0.5, 'rgba(214,218,222,0.93)');
-      base.addColorStop(0.78, 'rgba(210,215,219,0.85)');
-      base.addColorStop(1, 'rgba(190,196,202,0.25)');
+      base.addColorStop(0, 'rgba(190,196,202,0.12)');
+      base.addColorStop(0.18, 'rgba(212,217,221,0.9)');
+      base.addColorStop(0.5, 'rgba(216,220,224,0.97)');
+      base.addColorStop(0.82, 'rgba(212,217,221,0.9)');
+      base.addColorStop(1, 'rgba(190,196,202,0.12)');
       g.fillStyle = base;
       g.fillRect(0, 0, w, h);
       // 亮斑/暗斑：打破均匀感
@@ -661,13 +661,13 @@ const Render = (function () {
       const d = Math.hypot(camera.position.x - s.x, camera.position.z - s.z);
       if (d < s.r) {
         const t = 1 - (d / s.r) * (d / s.r);
-        target = Math.max(target, Math.pow(t, 0.9) * s.life);
+        target = Math.max(target, Math.pow(t, 0.8) * s.life);
       }
     }
     smokeStrength += (target - smokeStrength) * Math.min(1, dt * 4);
     // —— 烟内指数雾：远处世界溶入烟色；离开烟团后恢复普通雾 ——
     if (smokeStrength > 0.03) {
-      smokeFog.density = 0.3 * smokeStrength;
+      smokeFog.density = 0.42 * smokeStrength;
       if (scene.fog !== smokeFog) scene.fog = smokeFog;
     } else if (scene.fog !== baseFog) {
       scene.fog = baseFog;
@@ -695,7 +695,7 @@ const Render = (function () {
         wl.visible = true;
         wl.position.set(s.x, yc, s.z);
         wl.scale.setScalar(r * 0.95);
-        wl.material.opacity = 0.8 * fade;
+        wl.material.opacity = 0.9 * fade;
         wl.rotation.y = smokeClock * 0.05 + gi; // 烟墙缓慢旋转 → 表面纹理流动
       }
       // 外壳（FrontSide，r×1.0）：从外面盖住烟内的人，站在烟内时自动不渲染
@@ -704,7 +704,7 @@ const Render = (function () {
         shl.visible = true;
         shl.position.set(s.x, yc, s.z);
         shl.scale.setScalar(r * 1.0);
-        shl.material.opacity = 0.7 * fade;
+        shl.material.opacity = 0.85 * fade;
         shl.rotation.y = -smokeClock * 0.04 + gi * 1.3;
       }
       // 内壳（FrontSide，r×0.8）：第二层烟面，反方向旋转 → 双层纹理叠出厚度
@@ -713,7 +713,7 @@ const Render = (function () {
         sh2.visible = true;
         sh2.position.set(s.x, yc, s.z);
         sh2.scale.setScalar(r * 0.8);
-        sh2.material.opacity = 0.62 * fade;
+        sh2.material.opacity = 0.78 * fade;
         sh2.rotation.y = smokeClock * 0.06 + gi * 2.1;
       }
       // 核心云絮：绕烟团翻滚
@@ -731,7 +731,7 @@ const Render = (function () {
         );
         const sc = r * (0.5 + ((k * 7 + gi) % 5) * 0.12);
         sp.scale.set(sc, sc, 1);
-        sp.material.opacity = (0.20 + ((k * 3 + gi) % 4) * 0.05) * fade;
+        sp.material.opacity = (0.26 + ((k * 3 + gi) % 4) * 0.05) * fade;
         sp.material.rotation = smokeClock * 0.07 * (k % 2 ? 1 : -1);
       }
       // 边缘云絮：贴球面起伏 → 遮住球体硬边，形成云朵外缘
@@ -745,9 +745,9 @@ const Render = (function () {
           yc + Math.sin(k * 2.3 + smokeClock * 0.25 + gi) * r * 0.5,
           s.z + Math.sin(a) * r * 0.96
         );
-        const sc = r * 0.78;
+        const sc = r * 0.85;
         sp.scale.set(sc, sc, 1);
-        sp.material.opacity = 0.42 * fade;
+        sp.material.opacity = 0.52 * fade;
         sp.material.rotation = -smokeClock * 0.09 + k;
       }
     }
@@ -771,7 +771,7 @@ const Render = (function () {
       );
       const scl = 4.2 + i * 2.0;
       q.scale.set(scl, scl, 1);
-      q.material.opacity = st * (0.24 - i * 0.04);
+      q.material.opacity = st * (0.30 - i * 0.05);
       q.material.rotation = ph * 0.16;
     }
   }

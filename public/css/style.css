@@ -147,7 +147,7 @@ input, select, button { font-family: inherit; }
 #smoke-overlay {
   position: absolute; inset: 0; pointer-events: none; z-index: 14;
   background:
-    radial-gradient(circle at 50% 46%, rgba(206,210,214,0.30) 0%, rgba(198,203,208,0.42) 48%, rgba(188,194,200,0.55) 78%, rgba(182,188,194,0.62) 100%);
+    radial-gradient(circle at 50% 46%, rgba(208,212,216,0.42) 0%, rgba(200,205,210,0.56) 48%, rgba(190,196,202,0.70) 78%, rgba(184,190,196,0.78) 100%);
   animation: smokeDrift 7s ease-in-out infinite alternate;
 }
 @keyframes smokeDrift {
