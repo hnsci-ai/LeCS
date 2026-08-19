@@ -84,6 +84,8 @@ const VM = (function () {
   function build(id) {
     const root = new THREE.Group();
     let tip = { x: 0, y: 0.03, z: -0.55 };
+    let boltMesh = null; // 拉栓件（有则支持拉栓动画）
+    let trail = null;    // 刃光弧（匕首挥砍轨迹）
     const add = (m) => root.add(m);
     switch (id) {
       case 'ak47': {
@@ -94,7 +96,7 @@ const VM = (function () {
         add(box(0.018, 0.05, 0.014, DARK, 0, 0.085, -0.5));    // 准星
         add(box(0.05, 0.035, 0.09, WOOD, 0, -0.02, -0.28));    // 护木
         add(box(0.014, 0.045, 0.02, DARK, 0, -0.055, -0.15));  // 握把        add(box(0.024, 0.035, 0.016, DARK, 0, 0.075, -0.08));   // 照门
-        add(box(0.012, 0.03, 0.05, METAL, 0.03, 0.035, -0.12));  // 拉机柄
+        boltMesh = box(0.014, 0.035, 0.06, METAL, 0.03, 0.035, -0.12); add(boltMesh); // 拉机柄（拉栓动画）
         tip = { x: 0, y: 0.045, z: -0.56 };
         break;
       }
@@ -105,6 +107,7 @@ const VM = (function () {
         add(box(0.032, 0.032, 0.3, DARK, 0, 0.045, -0.42));    // 消音器
         add(box(0.02, 0.05, 0.014, DARK, 0, 0.08, -0.3));      // 准星
         add(box(0.03, 0.03, 0.05, DARK, 0, 0.1, -0.28));       // 提把        add(box(0.022, 0.032, 0.016, DARK, 0, 0.07, -0.12));   // 照门
+        boltMesh = box(0.012, 0.03, 0.05, METAL, -0.03, 0.045, -0.05); add(boltMesh); // 拉机柄
         tip = { x: 0, y: 0.045, z: -0.6 };
         break;
       }
@@ -113,7 +116,7 @@ const VM = (function () {
         add(box(0.045, 0.075, 0.15, DARK, 0, 0.01, 0.1));
         add(box(0.03, 0.03, 0.34, DARK, 0, 0.05, -0.5));       // 枪管
         add(box(0.035, 0.035, 0.16, DARK, 0, 0.09, -0.28));    // 瞄准镜
-        const boltMesh = box(0.016, 0.05, 0.03, DARK, 0, -0.02, 0.03); add(boltMesh); // 拉栓        add(box(0.012, 0.04, 0.012, DARK, 0, 0.08, -0.62));   // 准星
+        boltMesh = box(0.016, 0.05, 0.03, DARK, 0, -0.02, 0.03); add(boltMesh); // 拉栓        add(box(0.012, 0.04, 0.012, DARK, 0, 0.08, -0.62));   // 准星
         add(box(0.035, 0.09, 0.04, METAL, 0, -0.065, -0.16)); // 弹匣
         tip = { x: 0, y: 0.05, z: -0.7 };
         break;
@@ -151,6 +154,15 @@ const VM = (function () {
         add(box(0.028, 0.05, 0.1, WOOD, 0, 0.02, -0.02));     // 柄
         add(box(0.016, 0.07, 0.22, METAL, 0, 0.07, -0.12));    // 刃
         add(box(0.005, 0.09, 0.22, DARK, 0, 0.07, -0.12));
+        // 刃光弧：挥砍轨迹残影（加法混合，随挥砍淡出）
+        trail = new THREE.Mesh(
+          new THREE.TorusGeometry(0.26, 0.014, 6, 20, Math.PI * 1.05),
+          new THREE.MeshBasicMaterial({ color: 0xeef4ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })
+        );
+        trail.position.set(0, 0.05, -0.05);
+        trail.rotation.z = -Math.PI / 2;
+        trail.visible = false;
+        add(trail);
         tip = { x: 0, y: 0.09, z: -0.26 };
         break;
       }
@@ -217,7 +229,7 @@ const VM = (function () {
         add(box(0.045, 0.075, 0.15, DARK, 0, 0.015, 0.1));
         add(box(0.04, 0.11, 0.05, METAL, 0, -0.06, -0.14));
         add(box(0.03, 0.03, 0.3, DARK, 0, 0.045, -0.46));
-        add(box(0.012, 0.02, 0.03, DARK, 0, 0.03, 0.02));  // 拉机柄        add(box(0.02, 0.03, 0.014, DARK, 0, 0.072, -0.08));    // 照门
+        boltMesh = box(0.012, 0.02, 0.035, DARK, 0, 0.03, 0.02); add(boltMesh);  // 拉机柄        add(box(0.02, 0.03, 0.014, DARK, 0, 0.072, -0.08));    // 照门
         tip = { x: 0, y: 0.045, z: -0.62 };
         break;
       case 'famas':
@@ -226,6 +238,7 @@ const VM = (function () {
         add(box(0.04, 0.12, 0.05, METAL, 0, -0.07, -0.1));
         add(box(0.03, 0.04, 0.1, DARK, 0, 0.09, -0.1));     // 提把        add(box(0.02, 0.028, 0.014, DARK, 0, 0.068, -0.06));   // 照门
         add(box(0.03, 0.03, 0.2, DARK, 0, 0.045, -0.36));
+        boltMesh = box(0.012, 0.028, 0.05, METAL, 0, 0.055, 0.01); add(boltMesh); // 拉机柄
         tip = { x: 0, y: 0.045, z: -0.48 };
         break;
       case 'sg552':
@@ -234,6 +247,7 @@ const VM = (function () {
         add(box(0.04, 0.11, 0.05, METAL, 0, -0.065, -0.08));
         add(box(0.03, 0.03, 0.18, DARK, 0, 0.05, -0.3));
         add(box(0.02, 0.035, 0.05, DARK, 0, 0.09, -0.05));  // 顶部瞄准        add(box(0.018, 0.026, 0.014, DARK, 0, 0.066, -0.1));   // 照门
+        boltMesh = box(0.012, 0.03, 0.04, METAL, 0.03, 0.035, -0.02); add(boltMesh); // 拉机柄
         tip = { x: 0, y: 0.05, z: -0.42 };
         break;
       case 'aug':
@@ -242,6 +256,7 @@ const VM = (function () {
         add(box(0.04, 0.12, 0.05, METAL, 0, -0.07, -0.1));
         add(box(0.035, 0.04, 0.16, DARK, 0, 0.1, -0.08));   // 顶部瞄准镜        add(box(0.012, 0.035, 0.012, DARK, 0, 0.07, -0.42));   // 准星
         add(box(0.03, 0.03, 0.2, DARK, 0, 0.045, -0.36));
+        boltMesh = box(0.012, 0.03, 0.04, METAL, 0.03, 0.035, -0.1); add(boltMesh); // 拉机柄
         tip = { x: 0, y: 0.045, z: -0.48 };
         break;
       // ---- 新增狙击枪 ----
@@ -249,7 +264,7 @@ const VM = (function () {
         add(box(0.045, 0.07, 0.34, METAL, 0, 0.02, -0.16));
         add(box(0.04, 0.065, 0.14, DARK, 0, 0.015, 0.08));
         add(box(0.028, 0.028, 0.3, DARK, 0, 0.045, -0.44));
-        add(box(0.03, 0.03, 0.14, DARK, 0, 0.085, -0.22));  // 瞄准镜        const boltMesh = box(0.012, 0.025, 0.04, METAL, 0.03, 0.035, -0.14); add(boltMesh); // 拉栓
+        add(box(0.03, 0.03, 0.14, DARK, 0, 0.085, -0.22));  // 瞄准镜        boltMesh = box(0.012, 0.025, 0.04, METAL, 0.03, 0.035, -0.14); add(boltMesh); // 拉栓
         tip = { x: 0, y: 0.045, z: -0.6 };
         break;
       case 'g3sg1':
@@ -258,6 +273,7 @@ const VM = (function () {
         add(box(0.035, 0.12, 0.05, METAL, 0, -0.07, -0.14));
         add(box(0.03, 0.03, 0.32, DARK, 0, 0.05, -0.5));
         add(box(0.035, 0.04, 0.15, DARK, 0, 0.1, -0.24));   // 瞄准镜        add(box(0.012, 0.04, 0.012, DARK, 0, 0.078, -0.62));   // 准星
+        { boltMesh = box(0.014, 0.03, 0.05, METAL, 0.03, 0.035, 0.0); add(boltMesh); } // 拉机柄
         tip = { x: 0, y: 0.05, z: -0.68 };
         break;
       case 'sg550':
@@ -266,6 +282,7 @@ const VM = (function () {
         add(box(0.035, 0.12, 0.05, METAL, 0, -0.07, -0.14));
         add(box(0.03, 0.03, 0.3, DARK, 0, 0.05, -0.48));
         add(box(0.035, 0.04, 0.14, DARK, 0, 0.1, -0.22));        add(box(0.012, 0.04, 0.012, DARK, 0, 0.078, -0.6));    // 准星
+        { boltMesh = box(0.014, 0.03, 0.05, METAL, 0.03, 0.035, 0.0); add(boltMesh); } // 拉机柄
         tip = { x: 0, y: 0.05, z: -0.66 };
         break;
       // ---- 机枪 ----
@@ -275,6 +292,7 @@ const VM = (function () {
         add(box(0.07, 0.1, 0.09, DARK, 0, -0.07, -0.05));   // 弹药箱
         add(box(0.035, 0.035, 0.34, DARK, 0, 0.05, -0.5));  // 粗枪管
         add(box(0.012, 0.03, 0.05, DARK, 0, 0.1, -0.3));    // 准星        add(box(0.02, 0.03, 0.016, DARK, 0, 0.075, -0.08));    // 照门
+        { boltMesh = box(0.014, 0.03, 0.05, METAL, 0.03, 0.045, -0.05); add(boltMesh); } // 拉机柄
         tip = { x: 0, y: 0.05, z: -0.68 };
         break;
       case 'flashbang': {
@@ -299,7 +317,7 @@ const VM = (function () {
         tip = { x: 0, y: 0.02, z: -0.14 };
       }
     }
-    return { root, tip, bolt: typeof boltMesh !== 'undefined' ? boltMesh : null };
+    return { root, tip, bolt: boltMesh, trail };
   }
 
   function init(camera) {
@@ -389,7 +407,7 @@ const VM = (function () {
     const b = build(id);
     addHands(b.root, id);
     group.add(b.root);
-    cur = { weapon: id, root: b.root, tip: b.tip, kick: 0, bobPhase: 0, reloadT: 0, slash: 0, slashHeavy: false, bolt: b.bolt, boltT: 0, boltBaseZ: b.bolt ? b.bolt.position.z : 0 };
+    cur = { weapon: id, root: b.root, tip: b.tip, kick: 0, bobPhase: 0, reloadT: 0, slash: 0, slashHeavy: false, bolt: b.bolt, boltT: 0, boltBaseZ: b.bolt ? b.bolt.position.z : 0, trail: b.trail, cockDip: 0, cockTilt: 0, wasReload: false };
   }
 
   // 切枪：先下收旧枪，再上举新枪（约 0.3 秒）
@@ -407,7 +425,7 @@ const VM = (function () {
     if (!cur) return;
     if (cur.weapon === 'knife') { cur.slash = 1; cur.slashHeavy = !!alt; return; } // 匕首：挥砍，无火光（轻/重不同动画）
     cur.kick = 1;
-    if (cur.bolt) cur.boltT = 1; // 拉栓动画（AWP/Scout）
+    if (cur.bolt && (cur.weapon === 'awp' || cur.weapon === 'scout')) cur.boltT = 1; // 栓动枪每发拉栓（其余枪出枪/换弹时拉栓）
     // 枪口火光（星芒随机旋转/缩放 + 柔光）
     const sc = 0.17 + Math.random() * 0.09;
     muzzleStar.visible = true;
@@ -454,54 +472,79 @@ const VM = (function () {
         }
       } else {
         group.position.y = -0.57 + pp * 0.32;
-        if (pp >= 1) switchAnim = null;
+        if (pp >= 1) {
+          switchAnim = null;
+          if (cur.bolt) cur.boltT = 1; // 举枪完成 → 拉栓上膛
+        }
       }
     }
-    // 拉栓动画（后拉-回位）
+    // 拉栓动画（后拉-回位 + 枪身轻沉/微倾）
     if (cur.boltT > 0) {
-      cur.boltT -= dt * 4.5;
+      cur.boltT -= dt * 3.0;
       const k = Math.sin((1 - Math.max(0, cur.boltT)) * Math.PI);
-      if (cur.bolt) cur.bolt.position.z = cur.boltBaseZ + k * 0.055;
-    }
+      if (cur.bolt) cur.bolt.position.z = cur.boltBaseZ + k * 0.09;
+      cur.cockDip = k * 0.022;
+      cur.cockTilt = k * 0.12;
+    } else { cur.cockDip = 0; cur.cockTilt = 0; }
 
     // 后坐力恢复
     cur.kick = Math.max(0, cur.kick - dt * 9);
     const kickZ = cur.kick * 0.09;
     const kickX = -cur.kick * 0.05;
 
-    // 换弹动画
+    // 换弹动画（结束后拉栓）
     let reloadDrop = 0, reloadTilt = 0;
     if (st.reloading) {
       cur.reloadT += dt;
       const p = Math.sin(Math.min(cur.reloadT / (st.reloadDur || 2.5), 1) * Math.PI);
       reloadDrop = p * 0.16;
       reloadTilt = p * 0.9;
-    } else cur.reloadT = 0;
+      cur.wasReload = true;
+    } else {
+      if (cur.wasReload && cur.bolt) cur.boltT = 1; // 换弹完成 → 拉栓上膛
+      cur.wasReload = false;
+      cur.reloadT = 0;
+    }
 
     if (!switchAnim) {
       group.position.set(
         0.27 + sway + bobX * 0.5 + kickX,
-        -0.25 + bobY - reloadDrop,
+        -0.25 + bobY - reloadDrop - cur.cockDip,
         -0.42 + kickZ
       );
-      group.rotation.set(reloadTilt, 0, cur.kick * 0.06);
+      group.rotation.set(reloadTilt + cur.cockTilt, 0, cur.kick * 0.06);
     } else {
       group.position.x = 0.27;
       group.rotation.set(0, 0, 0);
     }
 
-    // 匕首挥砍动画（轻击快劈 / 重击高举下劈）
+    // 匕首挥砍动画：轻击横向快劈 / 重击高举下劈，带刃光弧残影
     if (cur.slash > 0) {
-      const spd = cur.slashHeavy ? 2.6 : 5.5;
+      const spd = cur.slashHeavy ? 2.3 : 4.8;
       cur.slash -= dt * spd;
-      const sw = Math.sin(Math.max(0, cur.slash) * Math.PI);
-      cur.root.rotation.z = -sw * (cur.slashHeavy ? 1.45 : 1.15);
-      cur.root.rotation.y = sw * (cur.slashHeavy ? 0.75 : 0.55);
-      cur.root.rotation.x = cur.slashHeavy ? -sw * 0.5 : 0;
+      const p = Math.max(0, cur.slash);
+      const sw = Math.sin(p * Math.PI);
+      if (cur.slashHeavy) {
+        const raise = Math.min(1, (1 - p) * 2);   // 抬刀 0→1
+        const chop = Math.max(0, 1 - p * 2);      // 下劈 0→1
+        cur.root.rotation.x = -raise * 0.95 + chop * 1.5;
+        cur.root.rotation.z = chop * 0.25;
+        cur.root.rotation.y = 0;
+      } else {
+        cur.root.rotation.z = 0.7 - (1 - p) * 2.05; // 横扫：右上 → 左下
+        cur.root.rotation.y = (1 - p) * 0.35;
+        cur.root.rotation.x = 0;
+      }
+      if (cur.trail) {
+        cur.trail.visible = true;
+        cur.trail.material.opacity = sw * 0.85;
+        cur.trail.rotation.x = cur.slashHeavy ? Math.PI / 2 : 0;
+      }
     } else {
       cur.root.rotation.z = 0;
       cur.root.rotation.y = 0;
       cur.root.rotation.x = 0;
+      if (cur.trail) { cur.trail.visible = false; cur.trail.material.opacity = 0; }
     }
 
     // 硝烟漂移消散
