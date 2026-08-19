@@ -12,6 +12,7 @@
   //   penetration = 穿墙伤害系数（单面墙）
   var W = {
     dog: { id: 'dog', moveSpeed: 1.0, name: '哈基狗', slot: -1, price: 0, dmg: 3 }, // 仅用于击杀播报显示名称
+    burn: { id: 'burn', moveSpeed: 1.0, name: '🔥燃烧', slot: -1, price: 0, dmg: 3 }, // 仅用于击杀播报显示名称
     // 匕首：CS 1.6 规则刀伤无视护甲（armorPen=1 全穿透），轻击 25 / 重击 50 恒定
     knife: { id: 'knife', moveSpeed: 1.0, name: '匕首', slot: 0, price: 0, dmg: 25, dmgAlt: 50, rate: 2.0, rateAlt: 1.0, range: 1.6, spread: 0, mag: 0, reserve: 0, reload: 0, team: null, auto: false, armorPen: 1, rangeMod: 1, penetration: 1 },
     usp: { id: 'usp', moveSpeed: 1.0, name: 'USP', slot: 2, price: 500, dmg: 34, rate: 6.9, range: 999, spread: 0.012, spreadMove: 0.045, spreadJump: 0.12, mag: 12, reserve: 100, reload: 2.4, team: 1, auto: false, ammoPrice: 30, armorPen: 0.7, rangeMod: 0.79, penetration: 0.4 },
@@ -54,7 +55,7 @@
     { name: '狙击枪', items: ['awp', 'scout', 'g3sg1', 'sg550'] },
     { name: '机枪', items: ['m249'] },
     { name: '装备', items: ['kevlar', 'helmet', 'defuse', 'hachiko', 'hegrenade', 'flashbang', 'smokegrenade'] },
-    { name: '弹药', items: ['ammo'] }
+    { name: '弹药', items: ['ammo', 'ammo_incendiary', 'ammo_ap', 'ammo_limb'] }
   ];
 
   var gear = {
@@ -62,7 +63,11 @@
     helmet: { id: 'helmet', moveSpeed: 1.0, name: '头盔', price: 350, team: null },
     defuse: { id: 'defuse', moveSpeed: 1.0, name: '拆弹器', price: 200, team: 1 },
     hachiko: { id: 'hachiko', moveSpeed: 1.0, name: '哈基狗', price: 1000, team: null },
-    ammo: { id: 'ammo', moveSpeed: 1.0, name: '弹药', price: 0, team: null }
+    ammo: { id: 'ammo', moveSpeed: 1.0, name: '弹药', price: 0, team: null },
+    // 特殊子弹（30 发一组，同种可叠加至 90 发；换种类则替换）
+    ammo_incendiary: { id: 'ammo_incendiary', moveSpeed: 1.0, name: '燃烧子弹×30', price: 900, team: null },
+    ammo_ap: { id: 'ammo_ap', moveSpeed: 1.0, name: '穿甲弹×30', price: 1200, team: null },
+    ammo_limb: { id: 'ammo_limb', moveSpeed: 1.0, name: '破肢弹×30', price: 700, team: null }
   };
 
   return {

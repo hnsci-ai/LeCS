@@ -94,6 +94,9 @@ const HUD = (function () {
         const wdef = WEAPONS.W[myEntry[10]];
         if (!wdef || !wdef.ammoPrice || myEntry[12] >= wdef.reserve) disabled = true; // 备弹已满
       }
+      // 特殊子弹：同种显示已拥有
+      if ((bi.id === 'ammo_incendiary' || bi.id === 'ammo_ap' || bi.id === 'ammo_limb')
+        && myEntry && myEntry[30] === bi.id.slice(5)) owned = true;
       if (money < cost) disabled = true;
       bi.el.classList.toggle('disabled', disabled);
       bi.el.classList.toggle('owned', owned);
@@ -148,7 +151,10 @@ const HUD = (function () {
       const wdef2 = my[10] ? WEAPONS.W[my[10]] : null;
       const speedTag = (wdef2 && wdef2.moveSpeed && wdef2.moveSpeed < 0.99)
         ? '　移速 ' + Math.round(wdef2.moveSpeed * 100) + '%' : '';
-      el.weaponName.textContent = wname + speedTag + (my[19] ? '（换弹中…）' : '');
+      // 特殊子弹状态：🔥燃烧 / 🛡穿甲 / 🦴破肢 + 剩余发数
+      const ammoIcons = { incendiary: '🔥', ap: '🛡', limb: '🦴' };
+      const ammoTag = (my[30] && ammoIcons[my[30]]) ? ('　' + ammoIcons[my[30]] + '×' + (my[31] || 0)) : '';
+      el.weaponName.textContent = wname + speedTag + ammoTag + (my[19] ? '（换弹中…）' : '');
       el.ammoMag.textContent = my[11];
       el.ammoRes.textContent = my[12];
       el.money.textContent = '$' + my[13];
@@ -214,7 +220,9 @@ const HUD = (function () {
   }
 
   // ---------- 雷达 ----------
+  let lastRadarIds = [];
   function updateRadar(myPos, myYaw, players, bomb, hostages) {
+    lastRadarIds = players.map(p => p.id); // 测试辅助：雷达实际绘制的人员
     const ctx = el.radar.getContext('2d');
     const S = 170, R = S / 2;
     ctx.clearRect(0, 0, S, S);
@@ -408,6 +416,7 @@ const HUD = (function () {
   }
 
   return {
+    _debugRadar: () => lastRadarIds.slice(),
     init, updateGame, updateRadar, setKillfeed, showHit, showDamage,
     showMessage, showBanner, setRoomCode, showBuyMenu, refreshBuyMenu,
     buyOpen, buyKey, showScoreboard, updateLootPrompt, updateFps,

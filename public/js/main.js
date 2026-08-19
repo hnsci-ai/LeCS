@@ -625,6 +625,9 @@ const Main = (function () {
         if (ev.event === 'hit') { Render.impact(ev.x, ev.y, ev.z, 1); Audio.shellTink(); }
         if (ev.event === 'explode') { Audio.explosion(); Render.explosion(ev.x, ev.y + 0.2, ev.z); Render.barrelDestroyed(ev.id); }
         break;
+      case 'ammo':
+        if (ev.event === 'burn') HUD.showMessage('被燃烧弹击中，正在燃烧！', '#ff8c42');
+        break;
       case 'dog':
         // 哈基狗：撕咬（主人视角狗叫）；咬到自己 → 减速提示；狗受伤/死亡 → 哀嚎
         if (ev.event === 'bite') {
@@ -960,10 +963,12 @@ const Main = (function () {
     if (S.sim) {
       S.radarTick = (S.radarTick || 0) + 1;
       if (S.radarTick % 5 === 0) { // 12Hz 重绘，减少每帧 2D 开销
-        // 雷达同样受烟雾遮挡：烟里的人/自己在烟里时，不显示人物点
+        // 雷达：只显示队友（敌人不可见），且受烟雾遮挡
         HUD.updateRadar(
           { x: S.sim.x, z: S.sim.z }, S.sim.yaw,
-          Array.from(players.values()).filter(p => p.id !== S.myId && !Render.smokeHidesPoint(p.x, p.z)),
+          Array.from(players.values()).filter(p => p.id !== S.myId
+            && p.team === (me ? me[8] : 0)
+            && !Render.smokeHidesPoint(p.x, p.z)),
           snap ? snap.bomb : null,
           snap ? snap.hostages : null
         );

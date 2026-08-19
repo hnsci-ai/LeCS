@@ -315,6 +315,7 @@ class Game {
     this.players.forEach(p => {
       p.history = [];
       p.dog = null; // 哈基狗每回合重置（阵亡随主人）
+      p.ammoType = null; p.ammoShots = 0; p.burnUntil = 0; p.burnFrom = null; // 特殊子弹每回合重置
       if (p.bot && p.brain) p.brain.reset();
       // 死亡玩家重置装备，幸存者保留并补满弹药
       if (!p.survived) {
@@ -611,6 +612,8 @@ class Game {
       if (id === 'defuse' && p.defuseKit) return { ok: false, reason: '已有拆弹器' };
       if (id === 'hachiko' && p.dog && p.dog.alive) return { ok: false, reason: '本回合已有哈基狗' };
       if (id === 'hachiko' && !p.alive) return { ok: false, reason: '已阵亡' };
+      if ((id === 'ammo_incendiary' || id === 'ammo_ap' || id === 'ammo_limb')
+        && p.ammoType === id.slice(5) && p.ammoShots >= 90) return { ok: false, reason: '该子弹已满（最多90发）' };
       cost = g.price;
     } else {
       return { ok: false, reason: '未知物品' };
@@ -653,6 +656,11 @@ class Game {
       if (id === 'kevlar') p.armor = C.MAX_ARMOR;
       if (id === 'helmet') p.helmet = true;
       if (id === 'defuse') p.defuseKit = true;
+      if (id === 'ammo_incendiary' || id === 'ammo_ap' || id === 'ammo_limb') {
+        const t = id.slice(5); // incendiary / ap / limb
+        if (p.ammoType === t) p.ammoShots = Math.min(90, p.ammoShots + 30);
+        else { p.ammoType = t; p.ammoShots = 30; }
+      }
     }
     p.money = clamp(p.money - cost, 0, C.MAX_MONEY); // 双保险：扣款不越界
   }
@@ -705,6 +713,7 @@ class Game {
       this.tickNades(dt);
       this.tickSmokes(dt);
       this.tickDogs(dt); // 哈基狗：跟随/索敌/撕咬
+      this.tickBurns(dt); // 燃烧弹持续伤害
       this.tickHostages(dt);
       // 战利品箱 30 秒后过期消失（避免整回合残留）
       if (this.crates.length) {
@@ -831,6 +840,11 @@ class Game {
     const def = W[w.id];
     if (w.mag <= 0) return;
     w.mag--;
+    // 特殊子弹消耗（燃烧/穿甲/破肢，30 发一组）
+    if (p.ammoType && p.ammoShots > 0) {
+      p.ammoShots--;
+      if (p.ammoShots <= 0) p.ammoType = null;
+    }
     p.nextFire = now + (1000 / def.rate);
     const hit = this.hitscan(p, w.id, def);
     // 曳光弹数据：[起点x,y,z, 武器, 阵营, yaw, pitch, 命中x,y,z, 命中类型 0空/1墙/2玩家, 受害者id]
@@ -1020,15 +1034,20 @@ class Game {
 
   applyDamage(victim, attacker, def, partMul, dist, wallBang, wid) {
     if (!victim.alive || victim.god) return;
+    // 部位判定必须在特殊子弹修正之前（否则破肢弹会把腿误判成躯干吃护甲）
+    const isHead = partMul >= 3.9;
+    const isLegs = partMul <= 0.8;
+    // 特殊子弹：破肢弹 → 打四肢（腿部）比普通子弹多 35%
+    if (attacker && attacker.ammoType === 'limb' && partMul < 1) partMul *= 1.35;
     // CS 1.6 伤害模型：
     // 伤害 = 基础 × 距离衰减(rangeMod 每 9.525m) × 部位倍率 × 护甲穿透 × 穿墙系数
     let dmg = def.dmg * partMul;
     if (def.rangeMod && def.rangeMod !== 1) dmg *= Math.pow(def.rangeMod, dist / 9.525);
     if (wallBang < 1) dmg *= wallBang;
-    const isHead = partMul >= 3.9;
-    const isLegs = partMul <= 0.8;
     // 护甲：腿不吃护甲；头盔 = 头部命中同样受武器穿甲系数影响（1.6 模型）
-    const armored = !isLegs && victim.armor > 0 && (!isHead || victim.helmet);
+    // 穿甲弹：完全无视护甲，直接打到肉
+    const armored = !isLegs && victim.armor > 0 && (!isHead || victim.helmet)
+      && !(attacker && attacker.ammoType === 'ap');
     if (armored) {
       const before = dmg;
       const pen = def.armorPen !== undefined ? def.armorPen : 0.5;
@@ -1038,6 +1057,12 @@ class Game {
     }
     dmg = Math.max(1, Math.round(dmg));
     victim.hp -= dmg;
+    // 燃烧弹：中弹后 3 秒内每秒 3 点持续灼烧（刷新叠加计时）
+    if (attacker && attacker.ammoType === 'incendiary') {
+      victim.burnUntil = Date.now() + 4000;
+      victim.burnFrom = attacker;
+      if (victim.ws) this.sendEvent(victim, { type: 'ammo', event: 'burn' });
+    }
 
     // 事件：命中者反馈
     if (attacker.ws) this.sendEvent(attacker, { type: 'hit', target: victim.id, dmg, head: isHead, weapon: wid });
@@ -1289,6 +1314,20 @@ class Game {
       if (j === i || bb.destroyed) return;
       const dd = Math.hypot(bb.x - b.x, bb.z - b.z);
       if (dd < 2.2) this.explodeBarrel(j, attacker);
+    });
+  }
+
+  // ---------- 燃烧弹持续伤害 ----------
+  tickBurns(dt) {
+    const now = Date.now();
+    this.players.forEach(v => {
+      if (!v.alive || !v.burnUntil || v.burnUntil <= now) return;
+      v.burnAcc = (v.burnAcc || 0) + 3 * dt; // 每秒 3 点
+      while (v.burnAcc >= 1) {
+        v.burnAcc -= 1;
+        v.hp -= 1;
+        if (v.hp <= 0) { this.kill(v, v.burnFrom || v, 'burn', false); return; }
+      }
     });
   }
 
@@ -1556,7 +1595,8 @@ class Game {
         this.bomb.state === C.BOMB_CARRIED && this.bomb.carrier === p ? 1 : 0,
         +p.planting.toFixed(2), +p.defusing.toFixed(2),
         p.ackSeq, +p.vx.toFixed(2), +p.vz.toFixed(2), p.spectator ? 1 : 0, p.scoped || 0,
-        this.mode === 'armsrace' ? (p.armsLevel || 0) : 0
+        this.mode === 'armsrace' ? (p.armsLevel || 0) : 0,
+        p.ammoType || '', p.ammoShots || 0
       ]);
     });
     return {
