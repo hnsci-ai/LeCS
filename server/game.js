@@ -1152,13 +1152,13 @@ class Game {
     });
   }
 
-  // 烟雾弹：生成烟团（阻挡 Bot 视线，持续约 14 秒）
+  // 烟雾弹：生成烟团（阻挡 Bot 视线，持续约 22 秒，1.6 秒快速散开）
   smokeExplode(n) {
     this.smokes.push({
       x: n.x, y: n.y, z: n.z,
       r: 1.2, maxR: W.smokegrenade.blastRadius || 5.5,
       born: Date.now(), life: (W.smokegrenade.smokeTime || 22) * 1000,
-      growUntil: Date.now() + 3500
+      growUntil: Date.now() + 1600
     });
   }
 
