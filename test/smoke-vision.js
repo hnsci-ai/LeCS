@@ -99,10 +99,26 @@ const dist = (a, b) => Math.sqrt((a.r - b.r) ** 2 + (a.g - b.g) ** 2 + (a.b - b.
     return out.join(' ');
   }, xfrac);
 
-  // 1. 无烟时：屏幕中心是 Bot —— 验证参照（Bot 现戴便帽/头巾，头部像素偏暗，放宽阈值）
+  // 1. 无烟时：屏幕中心区域是 Bot —— 结构检查（头已挂组）+ 脸皮像素检查
   const p0 = await centerPixel();
-  console.log('  无烟时中心像素:', JSON.stringify(p0), '· 网格:', await gridInfo());
-  check(p0 && p0.r + p0.g + p0.b > 60, '无烟时屏幕中心有内容（Bot 参照）');
+  const heads0 = await page.evaluate(() => Render._debugPlayerHeads());
+  const skinFound = await page.evaluate(() => {
+    const c = document.getElementById('gl');
+    const ctx = c.getContext('webgl2') || c.getContext('webgl');
+    if (!ctx) return false;
+    const buf = new Uint8Array(4);
+    for (let y = 340; y <= 362; y += 2) {
+      for (let x = 626; x <= 654; x += 2) {
+        ctx.readPixels(x, y, 1, 1, ctx.RGBA, ctx.UNSIGNED_BYTE, buf);
+        if (buf[0] > 150 && buf[1] > 100 && buf[0] > buf[1] + 20 && buf[1] > buf[2] + 10) return true; // 皮肤色
+      }
+    }
+    return false;
+  });
+  console.log('  无烟时中心像素:', JSON.stringify(p0), '· 头部结构:', JSON.stringify(heads0),
+    '· 脸皮像素:', skinFound, '· 网格:', await gridInfo());
+  check(heads0.length > 0 && heads0.every(h => h.hasHead), 'Bot 头部模型存在且已挂到人物组');
+  check(skinFound, '屏幕中心区域出现 Bot 脸部皮肤色（头在渲染）');
   await page.screenshot({ path: 'test/artifacts/smoke-01-outside-no-smoke.png' });
 
   // 2. 掷烟员到 (0,-2) 朝 -z 投烟雾弹（落点约 (0,-10)，盖住 Bot），投完立即退回场外

@@ -288,6 +288,7 @@ const Render = (function () {
     sun.shadow.camera.top = 50; sun.shadow.camera.bottom = -50;
     sun.shadow.camera.far = 160;
     sun.shadow.bias = -0.0006;
+    sun.shadow.radius = 3; // PCFSoft 边缘再柔化
     scene.add(sun);
     const fill = new THREE.DirectionalLight(0x9db8d8, 0.55); // 无阴影冷补光：暗部不发死
     fill.position.set(-30, 20, 40);
@@ -1215,6 +1216,7 @@ const Render = (function () {
     });
     const t = new THREE.CanvasTexture(c);
     t.colorSpace = THREE.SRGBColorSpace;
+    applyAniso(t);
     fabricTex = t;
     return t;
   }
@@ -1259,11 +1261,11 @@ const Render = (function () {
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 10), skin);
     head.position.set(0, 1.52, 0);
     head.scale.y = 1.08;
-    // 手臂：肩部枢轴（从肩关节摆动）+ 上臂圆柱 + 手
+    // 手臂：肩部枢轴（从肩关节摆动）+ 上臂圆柱（深色衣袖，与躯干区分）+ 手
     function makeArm(x) {
       const pivot = new THREE.Group();
       pivot.position.set(x, 1.33, 0.06);
-      const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.058, 0.46, 8), cloth);
+      const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.058, 0.46, 8), dark);
       upper.position.y = -0.21;
       const hand = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 6), skin);
       hand.position.y = -0.45;
@@ -1308,7 +1310,15 @@ const Render = (function () {
     gunHold.position.set(0, 1.14, 0.26);
     g.add(gunHold);
 
-    g.add(vest, helm);
+    // 脸：两个小眼睛（头部前侧 +z，与枪/帽檐同向）
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0x241a12 });
+    const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.016, 6, 5), eyeMat);
+    eyeL.position.set(-0.045, 1.545, 0.108);
+    const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.016, 6, 5), eyeMat);
+    eyeR.position.set(0.045, 1.545, 0.108);
+    g.add(eyeL, eyeR);
+
+    g.add(torso, neck, head, vest, helm);
     g.userData = {
       legL: legL.hip, legR: legR.hip, kneeL: legL.knee, kneeR: legR.knee,
       armL, armR, torso, head, vest, helm, cap, headband, gunHold,
@@ -1711,6 +1721,21 @@ const Render = (function () {
     _debugSmokeSpheres: () => smokeWallPool.filter(m => m.visible).length,
     _debugBomb: () => ({ visible: !!(bombGroup && bombGroup.visible), planted: bombPlanted }),
     _debugBombLed: () => !!(bombLed && bombLed.visible),
+    // 玩家头部结构诊断（守护"头必须挂在人物组里"，曾漏 add 导致无头）
+    _debugPlayerHeads: () => {
+      const out = [];
+      for (const [id, m] of playerMeshes) {
+        if (!m.group.visible) continue;
+        let hasHead = false, headY = -1;
+        for (const c of m.group.children) {
+          if (c.geometry && c.geometry.type === 'SphereGeometry' && Math.abs(c.position.y - 1.52) < 0.01) {
+            hasHead = true; headY = c.position.y;
+          }
+        }
+        out.push({ id, hasHead, headY });
+      }
+      return out;
+    },
     _debugArmor: () => {
       const out = {};
       for (const [id, m] of playerMeshes) {
