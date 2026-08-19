@@ -327,19 +327,20 @@ const VM = (function () {
     initMuzzleSmoke();
   }
 
-  const GLOVE = new THREE.MeshLambertMaterial({ color: 0x30343c });
-  const SLEEVE = new THREE.MeshLambertMaterial({ color: 0x4a5560 });
+  const GLOVE = new THREE.MeshPhongMaterial({ color: 0x30343c, shininess: 20, specular: 0x3a3f46 });
+  const SLEEVE = new THREE.MeshPhongMaterial({ color: 0x4a5560, shininess: 14, specular: 0x2f353d });
 
-  // 双手/手臂模型（真实感：枪不再悬浮）
+  // 双手/手臂模型（真实感：枪不再悬浮；手=椭球、小臂=圆柱）
   function addHands(root, id) {
     const def = WEAPONS.W[id];
     const hand = () => {
-      const h = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.055, 0.105), GLOVE);
+      const h = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), GLOVE);
+      h.scale.set(1.3, 1.0, 2.0);
       h.castShadow = false;
       return h;
     };
     const arm = (w, h, d, x, y, z, rx) => {
-      const a = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), SLEEVE);
+      const a = new THREE.Mesh(new THREE.CylinderGeometry(w * 0.45, w * 0.6, h, 8), SLEEVE);
       a.position.set(x, y, z);
       a.rotation.x = rx || 0;
       a.castShadow = false;

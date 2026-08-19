@@ -13,6 +13,27 @@ const Ragdoll = (function () {
   const COL_STATIC = 1, COL_RAG = 2;
   const geoCache = new Map();
 
+  // 布纹噪声贴图（与生者模型布料一致，颜色由材质 color 乘出）
+  let fabricTex = null;
+  function getFabricTex() {
+    if (fabricTex) return fabricTex;
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d');
+    g.fillStyle = '#b8b8b8'; g.fillRect(0, 0, 64, 64);
+    for (let i = 0; i < 1100; i++) {
+      const v = 90 + Math.random() * 140 | 0;
+      g.fillStyle = `rgba(${v},${v},${v},${0.2 + Math.random() * 0.3})`;
+      g.fillRect(Math.random() * 64, Math.random() * 64, 1.2, 1.2);
+    }
+    g.strokeStyle = 'rgba(0,0,0,0.10)';
+    for (let y = 0; y < 64; y += 4) { g.beginPath(); g.moveTo(0, y); g.lineTo(64, y); g.stroke(); }
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    fabricTex = t;
+    return t;
+  }
+
   // 部件定义（相对脚底坐标，单位米）
   const PARTS = [
     { k: 'pelvis', s: [0.32, 0.2, 0.24], p: [0, 0.84, 0], m: 3 },
@@ -96,8 +117,8 @@ const Ragdoll = (function () {
     try {
       const teamCol = team === GAMECONST.TEAM_T ? 0xc87f3a : 0x4f78a4;
       const dark = team === GAMECONST.TEAM_T ? 0x8a5a28 : 0x35506e;
-      const clothMat = new THREE.MeshPhongMaterial({ color: teamCol, shininess: 12, specular: 0x2a2a2a });
-      const legMat = new THREE.MeshPhongMaterial({ color: dark, shininess: 12, specular: 0x2a2a2a });
+      const clothMat = new THREE.MeshPhongMaterial({ map: getFabricTex(), color: teamCol, shininess: 12, specular: 0x2a2a2a });
+      const legMat = new THREE.MeshPhongMaterial({ map: getFabricTex(), color: dark, shininess: 12, specular: 0x2a2a2a });
       const skinMat = new THREE.MeshPhongMaterial({ color: 0xd9a87c, shininess: 22, specular: 0x3a3a3a });
       const mats = [clothMat, legMat, skinMat];
       const matFor = (k) => k === 'head' ? skinMat : (k.startsWith('leg') ? legMat : clothMat);

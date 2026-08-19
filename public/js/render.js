@@ -459,18 +459,20 @@ const Render = (function () {
     let g = hostageMeshes.get(id);
     if (!g) {
       g = new THREE.Group();
-      const shirt = new THREE.MeshPhongMaterial({ color: 0xe8e4da, shininess: 12, specular: 0x3a3a3a });
-      const pants = new THREE.MeshPhongMaterial({ color: 0x4a5d7a, shininess: 12, specular: 0x2a2a2a });
+      const shirt = new THREE.MeshPhongMaterial({ map: fabricTexture(), color: 0xe8e4da, shininess: 12, specular: 0x3a3a3a });
+      const pants = new THREE.MeshPhongMaterial({ map: fabricTexture(), color: 0x4a5d7a, shininess: 12, specular: 0x2a2a2a });
       const skin = new THREE.MeshPhongMaterial({ color: 0xd9a87c, shininess: 22, specular: 0x3a3a3a });
-      const legL = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.72, 0.16), pants);
+      const legL = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.72, 8), pants);
       legL.position.set(-0.1, 0.36, 0);
       const legR = legL.clone(); legR.position.x = 0.1;
-      const torso = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.66, 0.26), shirt);
+      const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.215, 0.19, 0.66, 12), shirt);
       torso.position.set(0, 1.02, 0);
-      const head = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.24, 0.22), skin);
-      head.position.set(0, 1.55, 0);
+      torso.scale.z = 0.62;
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 10), skin);
+      head.position.set(0, 1.52, 0);
+      head.scale.y = 1.08;
       // 举起的双手（人质经典姿势）
-      const armL = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.5, 0.12), shirt);
+      const armL = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.055, 0.5, 8), shirt);
       armL.position.set(-0.28, 1.5, 0);
       armL.rotation.z = 0.5;
       const armR = armL.clone(); armR.position.x = 0.28; armR.rotation.z = -0.5;
@@ -1196,26 +1198,74 @@ const Render = (function () {
     return g;
   }
 
+  // 布纹噪声贴图（中性灰，颜色由材质 color 乘出 → 布料质感）
+  let fabricTex = null;
+  function fabricTexture() {
+    if (fabricTex) return fabricTex;
+    const c = makeCanvas(64, 64, (g, w, h) => {
+      g.fillStyle = '#b8b8b8'; g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 1100; i++) {
+        const v = 90 + Math.random() * 140 | 0;
+        g.fillStyle = `rgba(${v},${v},${v},${0.2 + Math.random() * 0.3})`;
+        g.fillRect(Math.random() * w, Math.random() * h, 1.2, 1.2);
+      }
+      g.strokeStyle = 'rgba(0,0,0,0.10)';
+      for (let y = 0; y < h; y += 4) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); }
+      for (let x = 0; x < w; x += 4) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, h); g.stroke(); }
+    });
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    fabricTex = t;
+    return t;
+  }
+
   function buildPlayerModel(team) {
     const g = new THREE.Group();
-    // Phong 材质：皮肤/布料带细微高光，不再死平
+    // Phong + 布纹：皮肤/布料带细微高光与织物颗粒
     const skin = new THREE.MeshPhongMaterial({ color: 0xd9a87c, shininess: 22, specular: 0x3a3a3a });
     const teamCol = team === GAMECONST.TEAM_T ? 0xc87f3a : 0x4f78a4;
-    const cloth = new THREE.MeshPhongMaterial({ color: teamCol, shininess: 12, specular: 0x2a2a2a });
-    const dark = new THREE.MeshPhongMaterial({ color: team === GAMECONST.TEAM_T ? 0x8a5a28 : 0x35506e, shininess: 12, specular: 0x2a2a2a });
-    // 圆润分段：头=球、躯干=椭圆柱、四肢=圆柱（比例贴近原盒型，动画 pivot 不变）
-    const legL = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.065, 0.72, 8), dark);
-    legL.position.set(-0.1, 0.36, 0);
-    const legR = legL.clone(); legR.position.x = 0.1;
+    const cloth = new THREE.MeshPhongMaterial({ map: fabricTexture(), color: teamCol, shininess: 12, specular: 0x2a2a2a });
+    const dark = new THREE.MeshPhongMaterial({ map: fabricTexture(), color: team === GAMECONST.TEAM_T ? 0x8a5a28 : 0x35506e, shininess: 12, specular: 0x2a2a2a });
+    const boot = new THREE.MeshPhongMaterial({ color: 0x2e2a24, shininess: 18, specular: 0x3a3a3a });
+
+    // 腿：髋部枢轴（从髋关节摆动）+ 大腿圆柱 + 朝前的靴子
+    function makeLeg(x) {
+      const pivot = new THREE.Group();
+      pivot.position.set(x, 0.73, 0);
+      const thigh = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.62, 8), dark);
+      thigh.position.y = -0.27;
+      const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.07, 0.16, 8), boot);
+      foot.position.set(0, -0.64, 0.05);
+      foot.rotation.x = Math.PI / 2; // 圆柱横放 → 靴子朝前
+      pivot.add(thigh, foot);
+      g.add(pivot);
+      return pivot;
+    }
+    const legL = makeLeg(-0.1);
+    const legR = makeLeg(0.1);
+    // 躯干（椭圆柱）+ 脖子
     const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.225, 0.2, 0.66, 12), cloth);
     torso.position.set(0, 1.02, 0);
     torso.scale.z = 0.62; // 侧面压薄，接近原盒型厚度
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.055, 0.1, 8), skin);
+    neck.position.y = 1.36;
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 10), skin);
-    head.position.set(0, 1.54, 0);
+    head.position.set(0, 1.52, 0);
     head.scale.y = 1.08;
-    const armL = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.5, 8), cloth);
-    armL.position.set(-0.3, 1.05, 0.1);
-    const armR = armL.clone(); armR.position.x = 0.3;
+    // 手臂：肩部枢轴（从肩关节摆动）+ 上臂圆柱 + 手
+    function makeArm(x) {
+      const pivot = new THREE.Group();
+      pivot.position.set(x, 1.33, 0.06);
+      const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.058, 0.46, 8), cloth);
+      upper.position.y = -0.21;
+      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 6), skin);
+      hand.position.y = -0.45;
+      pivot.add(upper, hand);
+      g.add(pivot);
+      return pivot;
+    }
+    const armL = makeArm(-0.3);
+    const armR = makeArm(0.3);
     // 防弹衣背心与头盔（默认隐藏，购买后显示）
     const kevlarMat = new THREE.MeshPhongMaterial({ color: 0x4a5246, shininess: 32, specular: 0x4a5450 });
     const vest = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.68, 12), kevlarMat);
@@ -1227,8 +1277,8 @@ const Render = (function () {
     helm.scale.y = 0.85;
     helm.visible = false;
 
-    g.add(legL, legR, torso, head, armL, armR, vest, helm);
-    g.userData = { legL, legR, armL, armR, torso, vest, helm, walkPhase: 0, dead: 0 };
+    g.add(legL, legR, torso, neck, head, armL, armR, vest, helm);
+    g.userData = { legL, legR, armL, armR, torso, head, vest, helm, walkPhase: 0, dead: 0 };
     g.castShadow = true;
     g.traverse(o => { if (o.isMesh) { o.castShadow = true; } });
     return g;
@@ -1287,8 +1337,10 @@ const Render = (function () {
         const ud = g.userData;
         ud.legL.rotation.x = swing;
         ud.legR.rotation.x = -swing;
-        ud.armL.rotation.x = -swing * 0.4;
-        ud.armR.rotation.x = swing * 0.4;
+        ud.armL.rotation.x = -swing * 0.45;
+        ud.armR.rotation.x = swing * 0.45;
+        // 走路躯干轻微起伏（腿从髋部摆，身体随步频上下颠）
+        ud.torso.position.y = 1.02 + Math.abs(Math.sin(ph)) * 0.03;
         // 受击踉跄（躯干后仰）
         if (m.flinch > 0) {
           m.flinch -= 0.14;
