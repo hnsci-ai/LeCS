@@ -39,9 +39,11 @@ function check(cond, msg) { if (cond) console.log('  ✓ ' + msg); else { failur
   page.on('pageerror', e => errors.push(String(e)));
   await page.goto('http://127.0.0.1:8081', { waitUntil: 'networkidle' });
   await page.fill('#nick', '观战测试');
-  await page.fill('#code', code);
   await page.selectOption('#team', 't'); // 与房主同队（房主 T，Bot 自动为 CT）
-  await page.click('#btn-join');
+  await page.click('#btn-join'); // 打开房间列表面板（大厅已无房间码输入框）
+  await page.waitForSelector('#rooms-panel:not(.hidden)', { timeout: 5000 });
+  await page.fill('#rooms-code', code);
+  await page.click('#rooms-join-code');
   await page.waitForSelector('#game:not(.hidden)', { timeout: 8000 });
   await sleep(1000);
   await page.waitForFunction(() => window.__lecsLastSnap && window.__lecsLastSnap.phase === 'live', null, { timeout: 30000 });

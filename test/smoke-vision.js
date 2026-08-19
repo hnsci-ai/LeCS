@@ -39,8 +39,10 @@ const dist = (a, b) => Math.sqrt((a.r - b.r) ** 2 + (a.g - b.g) ** 2 + (a.b - b.
   await page.goto('http://127.0.0.1:8071', { waitUntil: 'networkidle' });
   await page.fill('#nick', '观察员');
   await page.selectOption('#mode', 'test'); // 与房间模式一致（服务器会拒绝不匹配的加入）
-  await page.fill('#code', code);
-  await page.click('#btn-join');
+  await page.click('#btn-join'); // 打开房间列表面板（大厅已无房间码输入框）
+  await page.waitForSelector('#rooms-panel:not(.hidden)', { timeout: 5000 });
+  await page.fill('#rooms-code', code);
+  await page.click('#rooms-join-code');
   await page.waitForSelector('#game:not(.hidden)', { timeout: 8000 });
   await sleep(1500);
   // 观察员摆到 (0,-1)（烟团前方场外），Bot 摆到 (0,-9)（烟团内部，屏幕中心 8 米处）；

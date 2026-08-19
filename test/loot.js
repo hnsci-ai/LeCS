@@ -120,8 +120,10 @@ class Client {
   await page.goto('http://127.0.0.1:8064', { waitUntil: 'networkidle' });
   await page.fill('#nick', '观箱员');
   await page.selectOption('#team', 't'); // 与 a 同队，保证 a 死后回合不结束
-  await page.fill('#code', a.code);
-  await page.click('#btn-join');
+  await page.click('#btn-join'); // 打开房间列表面板（大厅已无房间码输入框）
+  await page.waitForSelector('#rooms-panel:not(.hidden)', { timeout: 5000 });
+  await page.fill('#rooms-code', a.code);
+  await page.click('#rooms-join-code');
   await page.waitForSelector('#game:not(.hidden)', { timeout: 8000 });
   await sleep(1000);
   await page.evaluate(() => window.__lecsSend({ t: 'dev', cmd: 'god' }));

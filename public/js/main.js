@@ -56,11 +56,7 @@ const Main = (function () {
       diff: document.getElementById('botdiff').value
     }));
     document.getElementById('btn-create').addEventListener('click', () => start({ code: null, bots: 0 }));
-    document.getElementById('btn-join').addEventListener('click', () => {
-      const code = document.getElementById('code').value.trim().toUpperCase();
-      if (code) { start({ code, bots: 0 }); return; } // 填了房间码 → 直接进入
-      openRoomsPanel(); // 未填 → 浏览房间列表
-    });
+    document.getElementById('btn-join').addEventListener('click', () => openRoomsPanel()); // 打开房间列表（面板内可输码直接进入）
     // —— 房间列表面板 ——
     const roomsPanel = document.getElementById('rooms-panel');
     document.getElementById('rooms-close').addEventListener('click', closeRoomsPanel);

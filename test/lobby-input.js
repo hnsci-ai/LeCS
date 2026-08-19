@@ -22,10 +22,12 @@ function check(cond, msg) { if (cond) console.log('  ✓ ' + msg); else { failur
   console.log('  昵称输入结果:', JSON.stringify(nick));
   check(nick === 'WASD12345REB', '昵称框完整输入 WASD12345REB（不被游戏按键拦截）✓ 关键修复');
 
-  // 房间码框输入数字+字母
-  await page.click('#code');
+  // 房间码框输入数字+字母（面板内；大厅已无房间码输入框）
+  await page.click('#btn-join');
+  await page.waitForSelector('#rooms-panel:not(.hidden)', { timeout: 5000 });
+  await page.click('#rooms-code');
   await page.keyboard.type('AB12');
-  const code = await page.inputValue('#code');
+  const code = await page.inputValue('#rooms-code');
   console.log('  房间码输入结果:', JSON.stringify(code));
   check(code === 'AB12', '房间码框完整输入 AB12（数字可输入）');
 

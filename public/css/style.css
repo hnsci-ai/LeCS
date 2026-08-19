@@ -51,7 +51,7 @@ input, select, button { font-family: inherit; }
   text-transform: uppercase; background: #141a20; color: #ffce45; font-weight: 700;
   border: 1px solid #2e3946; border-radius: 6px; outline: none;
 }
-.join-row button { flex: 0 0 auto; margin: 0; padding: 9px 16px; }
+.join-row button { flex: 1; margin: 0; padding: 9px 16px; }
 .msg { margin-top: 12px; font-size: 13px; color: #ff7a6b; min-height: 18px; }
 .tips { margin-top: 16px; font-size: 12px; line-height: 1.8; color: #6b7682; border-top: 1px dashed #2a333d; padding-top: 12px; }
 .tips b { color: #96a2ae; }

@@ -52,8 +52,10 @@ async function mapRoom(mapName, expectRooms) {
   await page.goto('http://127.0.0.1:8073', { waitUntil: 'networkidle' });
   await page.fill('#nick', '观图');
   await page.selectOption('#map', mapName);
-  await page.fill('#code', code);
-  await page.click('#btn-join');
+  await page.click('#btn-join'); // 打开房间列表面板（大厅已无房间码输入框）
+  await page.waitForSelector('#rooms-panel:not(.hidden)', { timeout: 5000 });
+  await page.fill('#rooms-code', code);
+  await page.click('#rooms-join-code');
   await page.waitForSelector('#game:not(.hidden)', { timeout: 8000 });
   await sleep(2500);
   const roomsIds = await page.evaluate(() => MAPDATA.rooms.map(r => r.id).join(','));

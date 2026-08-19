@@ -63,8 +63,10 @@ function check(cond, msg) { if (cond) console.log('  ✓ ' + msg); else { failur
   const selState = await page.evaluate(() => ({ val: document.getElementById('map').value, disabled: document.getElementById('map').disabled }));
   console.log('  大厅选择:', JSON.stringify(selState));
   check(selState.val === 'test' && selState.disabled, '选测试模式后地图强制为靶场且不可改 ✓');
-  await page.fill('#code', code);
-  await page.click('#btn-join');
+  await page.click('#btn-join'); // 打开房间列表面板（大厅已无房间码输入框）
+  await page.waitForSelector('#rooms-panel:not(.hidden)', { timeout: 5000 });
+  await page.fill('#rooms-code', code);
+  await page.click('#rooms-join-code');
   await page.waitForSelector('#game:not(.hidden)', { timeout: 8000 });
   await sleep(2500);
   const info = await page.evaluate(() => ({

@@ -42,8 +42,10 @@ function check(cond, msg) { if (cond) console.log('  ✓ ' + msg); else { failur
   // 页面加入同一房间
   await page.goto('http://127.0.0.1:8088', { waitUntil: 'networkidle' });
   await page.fill('#nick', '布娃娃测试');
-  await page.fill('#code', code);
-  await page.click('#btn-join');
+  await page.click('#btn-join'); // 打开房间列表面板（大厅已无房间码输入框）
+  await page.waitForSelector('#rooms-panel:not(.hidden)', { timeout: 5000 });
+  await page.fill('#rooms-code', code);
+  await page.click('#rooms-join-code');
   await page.waitForSelector('#game:not(.hidden)', { timeout: 8000 });
   await sleep(1500);
   await page.evaluate(() => window.__lecsSend({ t: 'dev', cmd: 'god' }));
