@@ -151,6 +151,17 @@ const dist = (a, b) => Math.sqrt((a.r - b.r) ** 2 + (a.g - b.g) ** 2 + (a.b - b.
   check(dOut > 60, '外面看不到烟里的 Bot（双层烟壳+云絮遮挡，像素距离>60）');
   const heads1 = await page.evaluate(() => Render._debugPlayerHeads());
   check(heads1.every(h => h.id !== botId), '烟里的 Bot 模型整体隐藏（不再有黑影子）');
+  // 烟体本身不透明：烟内非人物区域的背景（场边墙/天空）也应为烟灰色
+  const cloudPixel = await page.evaluate(() => {
+    const c = document.getElementById('gl');
+    const ctx = c.getContext('webgl2') || c.getContext('webgl');
+    const buf = new Uint8Array(4);
+    ctx.readPixels(Math.floor(c.width * 0.633), Math.floor(c.height * 0.42), 1, 1, ctx.RGBA, ctx.UNSIGNED_BYTE, buf);
+    return { r: buf[0], g: buf[1], b: buf[2] };
+  });
+  console.log('  烟体区域像素:', JSON.stringify(cloudPixel));
+  check(cloudPixel && Math.abs(cloudPixel.r - cloudPixel.g) < 30 && Math.abs(cloudPixel.g - cloudPixel.b) < 30,
+    '烟体本身不透明：透过烟看不到烟后的背景');
 
   // 4. 里面看：观察员进烟，Bot 移开 → 朝场边墙看只看到灰烟墙+雾
   await page.evaluate(() => window.__lecsSend({ t: 'dev', cmd: 'tp', x: 0, z: -7 })); // 进到烟团内部

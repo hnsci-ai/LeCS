@@ -682,11 +682,11 @@ const Render = (function () {
       g.clearRect(0, 0, w, h);
       // 基底：上下（球极方向）渐隐，中间高 alpha
       const base = g.createLinearGradient(0, 0, 0, h);
-      base.addColorStop(0, 'rgba(190,196,202,0.12)');
-      base.addColorStop(0.18, 'rgba(212,217,221,0.9)');
-      base.addColorStop(0.5, 'rgba(216,220,224,0.97)');
-      base.addColorStop(0.82, 'rgba(212,217,221,0.9)');
-      base.addColorStop(1, 'rgba(190,196,202,0.12)');
+      base.addColorStop(0, 'rgba(190,196,202,0.15)');
+      base.addColorStop(0.06, 'rgba(214,219,223,0.98)');
+      base.addColorStop(0.5, 'rgba(216,220,224,1.0)');
+      base.addColorStop(0.94, 'rgba(214,219,223,0.98)');
+      base.addColorStop(1, 'rgba(190,196,202,0.15)');
       g.fillStyle = base;
       g.fillRect(0, 0, w, h);
       // 亮斑/暗斑：打破均匀感
