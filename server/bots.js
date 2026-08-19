@@ -223,7 +223,7 @@ class BotBrain {
       this.aimYaw += clampMag(ey, maxTurn);
       this.aimPitch += clampMag(ep, maxTurn);
       p.yaw = this.aimYaw;
-      p.pitch = clampMag(this.aimPitch - (p.recoilPitch || 0), 1.5); // Bot 压枪抵消后坐力爬升
+      p.pitch = clampMag(this.aimPitch, 1.5);
 
       // 瞄准误差内开火（反应延迟后）
       this.seenTimer -= dt;

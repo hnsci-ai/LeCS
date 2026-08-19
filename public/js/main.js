@@ -3,10 +3,10 @@
 const Main = (function () {
   const C = GAMECONST;
   const RECOIL = {
-    ak47: 0.012, m4a1: 0.009, mp5: 0.007, tmp: 0.007, mac10: 0.010, ump45: 0.010, p90: 0.008,
-    galil: 0.010, famas: 0.008, sg552: 0.008, aug: 0.008, m249: 0.013,
-    awp: 0.03, scout: 0.022, g3sg1: 0.016, sg550: 0.016,
-    usp: 0.012, glock: 0.010, deagle: 0.024, p228: 0.014, fiveseven: 0.011, elites: 0.010
+    ak47: 0.007, m4a1: 0.005, mp5: 0.004, tmp: 0.004, mac10: 0.006, ump45: 0.006, p90: 0.005,
+    galil: 0.006, famas: 0.005, sg552: 0.005, aug: 0.005, m249: 0.008,
+    awp: 0.02, scout: 0.014, g3sg1: 0.01, sg550: 0.01,
+    usp: 0.008, glock: 0.006, deagle: 0.016, p228: 0.009, fiveseven: 0.007, elites: 0.006
   };
   const S = {
     ws: null, myId: 0, code: '', mode: 'classic', map: 'dust',
@@ -460,7 +460,7 @@ const Main = (function () {
           Audio.gunshot(wid, false);
           // 后坐力：枪口上跳（含轻微水平漂移）
           const rk = RECOIL[wid] || 0.005;
-          S.recoilP = Math.min(0.13, S.recoilP + rk);
+          S.recoilP = Math.min(0.09, S.recoilP + rk);
           S.recoilY += (Math.random() - 0.5) * rk * 0.6;
         }
         VM.fire();
