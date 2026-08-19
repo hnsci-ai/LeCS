@@ -27,9 +27,9 @@
     var wl = Math.sqrt(wx * wx + wz * wz);
     if (wl > 1e-6) { wx /= wl; wz /= wl; }
 
-    // 哈基狗撕咬减速：slowUntil 内移动速度降 40%
+    // 哈基狗撕咬减速：slowUntil 内移动速度降 40%；武器负重：p.moveMul（刀最快，重机枪/大狙最慢）
     var slowMul = (p.slowUntil && p.slowUntil > Date.now()) ? 0.6 : 1;
-    var maxSpeed = (input.walk ? C.WALK_SPEED : (input.crouch ? C.CROUCH_SPEED : C.RUN_SPEED)) * slowMul;
+    var maxSpeed = (input.walk ? C.WALK_SPEED : (input.crouch ? C.CROUCH_SPEED : C.RUN_SPEED)) * slowMul * (p.moveMul || 1);
 
     if (p.onGround) {
       var accel = wl > 0 ? C.GROUND_ACCEL : C.STOP_ACCEL;

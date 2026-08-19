@@ -476,6 +476,7 @@ const Main = (function () {
         const s = S.simStates[i];
         if (!s.inp) continue;
         S.sim.yaw = s.yaw;
+        S.sim.moveMul = WEAPONS.moveMul(S.sim); // 武器负重
         MOVEMENT.step(S.sim, s.inp, C.DT, MAPDATA.walls);
       }
     }
@@ -503,6 +504,7 @@ const Main = (function () {
       walk: inp.walk, crouch: inp.crouch, jump: inp.jump
     };
     S.prevSim = { x: S.sim.x, y: S.sim.y, z: S.sim.z, yaw: S.sim.yaw, pitch: S.sim.pitch };
+    S.sim.moveMul = WEAPONS.moveMul(S.sim); // 武器负重
     MOVEMENT.step(S.sim, movIn, C.DT, MAPDATA.walls);
     S.seq++;
     S.simStates.push({ seq: S.seq, x: S.sim.x, y: S.sim.y, z: S.sim.z, vx: S.sim.vx, vz: S.sim.vz, yaw: S.sim.yaw, pitch: S.sim.pitch, inp: movIn });

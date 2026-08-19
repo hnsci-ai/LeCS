@@ -684,6 +684,7 @@ class Game {
         if (p.alive) {
           if (p.bot && p.brain && this.mode !== 'test') p.brain.update(dt); // 测试模式 Bot 完全静止
           else this.applyLook(p);
+          p.moveMul = WPN.moveMul(p); // 武器负重（重枪慢、刀最快）
           MOV.step(p, p.in, dt, this.mapData.walls);
           p.in.jump = false;
           this.historyPush(p);
@@ -718,7 +719,7 @@ class Game {
     } else if (this.phase === C.STATE_END) {
       this.timeLeft -= dt;
       this.players.forEach(p => {
-        if (p.alive) { MOV.step(p, p.in, dt, this.mapData.walls); this.historyPush(p); }
+        if (p.alive) { p.moveMul = WPN.moveMul(p); MOV.step(p, p.in, dt, this.mapData.walls); this.historyPush(p); }
         if (p.bot && p.brain && this.mode !== 'test') p.brain.update(dt);
       });
       this.tickNades(dt);

@@ -144,7 +144,11 @@ const HUD = (function () {
       el.armorFill.style.width = Math.max(0, Math.min(100, my[7])) + '%';
       el.gearIcons.textContent = (my[20] ? '⛑' : '') + (my[21] ? '🛠' : '') + (my[22] ? '💣' : '') + (ui.dogHp > 0 ? '🐕' + ui.dogHp : '');
       const wname = my[10] ? (WEAPONS.W[my[10]] ? WEAPONS.W[my[10]].name : my[10]) : '';
-      el.weaponName.textContent = wname + (my[19] ? '（换弹中…）' : '');
+      // 武器负重提示：重枪显示移速百分比（刀/手枪/冲锋枪不显示）
+      const wdef2 = my[10] ? WEAPONS.W[my[10]] : null;
+      const speedTag = (wdef2 && wdef2.moveSpeed && wdef2.moveSpeed < 0.99)
+        ? '　移速 ' + Math.round(wdef2.moveSpeed * 100) + '%' : '';
+      el.weaponName.textContent = wname + speedTag + (my[19] ? '（换弹中…）' : '');
       el.ammoMag.textContent = my[11];
       el.ammoRes.textContent = my[12];
       el.money.textContent = '$' + my[13];
