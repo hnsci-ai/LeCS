@@ -349,7 +349,7 @@ const Render = (function () {
 
     // 墙体
     const wTex = wallTexture();
-    const wMat = new THREE.MeshLambertMaterial({ map: wTex });
+    const wMat = new THREE.MeshPhongMaterial({ map: wTex, shininess: 8, specular: 0x4a4438 }); // 微弱砖面高光
     const plainWalls = MAPDATA.walls.filter(w => !w.crate && !w.cover);
     wallMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), wMat, plainWalls.length);
     const m4 = new THREE.Matrix4();
@@ -368,7 +368,7 @@ const Render = (function () {
 
     // 箱子（木质实例）
     const cTex = crateTexture();
-    const cMat = new THREE.MeshLambertMaterial({ map: cTex });
+    const cMat = new THREE.MeshPhongMaterial({ map: cTex, shininess: 16, specular: 0x443a2a });
     crateMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), cMat, MAPDATA.crates.length);
     MAPDATA.crates.forEach((w, i) => {
       const dx = w.x2 - w.x1, dy = w.y2 - w.y1, dz = w.z2 - w.z1;
@@ -393,9 +393,9 @@ const Render = (function () {
     });
     const bagMap = new THREE.CanvasTexture(bagTex);
     bagMap.colorSpace = THREE.SRGBColorSpace;
-    const bagMat = new THREE.MeshLambertMaterial({ map: bagMap });
-    const blockMat = new THREE.MeshLambertMaterial({ color: 0x8d9299 });
-    const barrelMat = new THREE.MeshLambertMaterial({ color: 0xb34a3a });
+    const bagMat = new THREE.MeshPhongMaterial({ map: bagMap, shininess: 10, specular: 0x333333 });
+    const blockMat = new THREE.MeshPhongMaterial({ color: 0x8d9299, shininess: 14, specular: 0x4a4f55 });
+    const barrelMat = new THREE.MeshPhongMaterial({ color: 0xb34a3a, shininess: 32, specular: 0x6a3a30 });
     const bags = covers.filter(c => c.cover === 'sandbag');
     const blocks = covers.filter(c => c.cover === 'block');
     const barrels = covers.filter(c => c.cover === 'barrel');
@@ -443,7 +443,7 @@ const Render = (function () {
     scene.add(mB);
 
     // 中路双开门（装饰）
-    const doorMat = new THREE.MeshLambertMaterial({ color: 0x3e5240 });
+    const doorMat = new THREE.MeshPhongMaterial({ color: 0x3e5240, shininess: 20, specular: 0x3a4438 });
     for (const dz of [-1.7, 0.7]) {
       const d = new THREE.Mesh(new THREE.BoxGeometry(0.1, 2.5, 1.7), doorMat);
       d.position.set(4.05, 1.25, dz);
@@ -459,9 +459,9 @@ const Render = (function () {
     let g = hostageMeshes.get(id);
     if (!g) {
       g = new THREE.Group();
-      const shirt = new THREE.MeshLambertMaterial({ color: 0xe8e4da });
-      const pants = new THREE.MeshLambertMaterial({ color: 0x4a5d7a });
-      const skin = new THREE.MeshLambertMaterial({ color: 0xd9a87c });
+      const shirt = new THREE.MeshPhongMaterial({ color: 0xe8e4da, shininess: 12, specular: 0x3a3a3a });
+      const pants = new THREE.MeshPhongMaterial({ color: 0x4a5d7a, shininess: 12, specular: 0x2a2a2a });
+      const skin = new THREE.MeshPhongMaterial({ color: 0xd9a87c, shininess: 22, specular: 0x3a3a3a });
       const legL = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.72, 0.16), pants);
       legL.position.set(-0.1, 0.36, 0);
       const legR = legL.clone(); legR.position.x = 0.1;
@@ -502,13 +502,13 @@ const Render = (function () {
   function buildCrateModel() {
     const g = new THREE.Group();
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.65, 0.75),
-      new THREE.MeshLambertMaterial({ color: 0x4a5540 }));
+      new THREE.MeshPhongMaterial({ color: 0x4a5540, shininess: 14, specular: 0x3a4438 }));
     body.position.y = 0.33;
     const lid = new THREE.Mesh(new THREE.BoxGeometry(0.94, 0.1, 0.79),
-      new THREE.MeshLambertMaterial({ color: 0x5d6b4e }));
+      new THREE.MeshPhongMaterial({ color: 0x5d6b4e, shininess: 18, specular: 0x44503c }));
     lid.position.y = 0.71;
     const strap = new THREE.Mesh(new THREE.BoxGeometry(0.94, 0.09, 0.1),
-      new THREE.MeshLambertMaterial({ color: 0x2e352a }));
+      new THREE.MeshPhongMaterial({ color: 0x2e352a, shininess: 10, specular: 0x2a2a2a }));
     strap.position.y = 0.45;
     const glow = new THREE.Mesh(new THREE.BoxGeometry(0.97, 0.02, 0.82),
       new THREE.MeshBasicMaterial({ color: 0xffe9a0, transparent: true, opacity: 0.7 }));
@@ -546,17 +546,17 @@ const Render = (function () {
     const g = new THREE.Group();
     // 军绿色炸药砖（CS 经典配色）
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.26, 0.34),
-      new THREE.MeshLambertMaterial({ color: 0x4d5536 }));
+      new THREE.MeshPhongMaterial({ color: 0x4d5536, shininess: 14, specular: 0x3a4430 }));
     body.position.y = 0.15;
     g.add(body);
     // 顶部键盘面板
     const pad = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.06, 0.26),
-      new THREE.MeshLambertMaterial({ color: 0x2a2f2c }));
+      new THREE.MeshPhongMaterial({ color: 0x2a2f2c, shininess: 25, specular: 0x444a48 }));
     pad.position.y = 0.31;
     g.add(pad);
     // 面板按键条
     const keys = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.014, 0.11),
-      new THREE.MeshLambertMaterial({ color: 0x9aa06e }));
+      new THREE.MeshPhongMaterial({ color: 0x9aa06e, shininess: 10, specular: 0x333333 }));
     keys.position.set(-0.02, 0.345, 0);
     g.add(keys);
     // 红色指示灯（安放后闪烁）
@@ -1011,11 +1011,11 @@ const Render = (function () {
 
   // ---------- 玩家模型 ----------
   const thirdGunCache = new Map(); // weaponId -> Group（第三人称武器模型缓存）
-  // 枪械材质只创建一次（修复：原实现每把枪新建 4 个带纹理材质 → 100+ 纹理）
-  const GUN_TDARK = new THREE.MeshLambertMaterial({ map: gunMetalTexture(), color: 0x9aa0aa });
-  const GUN_TMETAL = new THREE.MeshLambertMaterial({ map: gunMetalTexture(), color: 0xc2c8d0 });
-  const GUN_TPOLY = new THREE.MeshLambertMaterial({ color: 0x23262b });
-  const GUN_TWOOD = new THREE.MeshLambertMaterial({ map: gunWoodTexture(), color: 0xc8a070 });
+  // 枪械材质只创建一次（修复：原实现每把枪新建 4 个带纹理材质 → 100+ 纹理）；Phong 高光突出金属感
+  const GUN_TDARK = new THREE.MeshPhongMaterial({ map: gunMetalTexture(), color: 0x9aa0aa, shininess: 45, specular: 0x6a7280 });
+  const GUN_TMETAL = new THREE.MeshPhongMaterial({ map: gunMetalTexture(), color: 0xc2c8d0, shininess: 85, specular: 0x9aa4b2 });
+  const GUN_TPOLY = new THREE.MeshPhongMaterial({ color: 0x23262b, shininess: 25, specular: 0x33373d });
+  const GUN_TWOOD = new THREE.MeshPhongMaterial({ map: gunWoodTexture(), color: 0xc8a070, shininess: 18, specular: 0x4a3a28 });
 
   function buildThirdGun(id) {
     if (!id) return null;
@@ -1198,28 +1198,33 @@ const Render = (function () {
 
   function buildPlayerModel(team) {
     const g = new THREE.Group();
-    const skin = new THREE.MeshLambertMaterial({ color: 0xd9a87c });
+    // Phong 材质：皮肤/布料带细微高光，不再死平
+    const skin = new THREE.MeshPhongMaterial({ color: 0xd9a87c, shininess: 22, specular: 0x3a3a3a });
     const teamCol = team === GAMECONST.TEAM_T ? 0xc87f3a : 0x4f78a4;
-    const cloth = new THREE.MeshLambertMaterial({ color: teamCol });
-    const dark = new THREE.MeshLambertMaterial({ color: team === GAMECONST.TEAM_T ? 0x8a5a28 : 0x35506e });
-
-    const legL = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.72, 0.16), dark);
+    const cloth = new THREE.MeshPhongMaterial({ color: teamCol, shininess: 12, specular: 0x2a2a2a });
+    const dark = new THREE.MeshPhongMaterial({ color: team === GAMECONST.TEAM_T ? 0x8a5a28 : 0x35506e, shininess: 12, specular: 0x2a2a2a });
+    // 圆润分段：头=球、躯干=椭圆柱、四肢=圆柱（比例贴近原盒型，动画 pivot 不变）
+    const legL = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.065, 0.72, 8), dark);
     legL.position.set(-0.1, 0.36, 0);
     const legR = legL.clone(); legR.position.x = 0.1;
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.66, 0.26), cloth);
+    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.225, 0.2, 0.66, 12), cloth);
     torso.position.set(0, 1.02, 0);
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.24, 0.22), skin);
-    head.position.set(0, 1.55, 0);
-    const armL = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.5, 0.12), cloth);
+    torso.scale.z = 0.62; // 侧面压薄，接近原盒型厚度
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 10), skin);
+    head.position.set(0, 1.54, 0);
+    head.scale.y = 1.08;
+    const armL = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.5, 8), cloth);
     armL.position.set(-0.3, 1.05, 0.1);
     const armR = armL.clone(); armR.position.x = 0.3;
     // 防弹衣背心与头盔（默认隐藏，购买后显示）
-    const kevlarMat = new THREE.MeshLambertMaterial({ color: 0x4a5246 });
-    const vest = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.68, 0.3), kevlarMat);
+    const kevlarMat = new THREE.MeshPhongMaterial({ color: 0x4a5246, shininess: 32, specular: 0x4a5450 });
+    const vest = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.68, 12), kevlarMat);
     vest.position.set(0, 1.03, 0);
+    vest.scale.z = 0.62;
     vest.visible = false;
-    const helm = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.11, 0.25), kevlarMat);
-    helm.position.set(0, 1.665, 0);
+    const helm = new THREE.Mesh(new THREE.SphereGeometry(0.145, 12, 8), kevlarMat);
+    helm.position.set(0, 1.6, 0);
+    helm.scale.y = 0.85;
     helm.visible = false;
 
     g.add(legL, legR, torso, head, armL, armR, vest, helm);

@@ -27,9 +27,10 @@ const VM = (function () {
     t.colorSpace = THREE.SRGBColorSpace;
     return t;
   }
-  const DARK = new THREE.MeshLambertMaterial({ map: matTexture('#22252a', false), color: 0xaab0b8 });
-  const METAL = new THREE.MeshLambertMaterial({ map: matTexture('#3a3f46', false), color: 0xcdd2da });
-  const WOOD = new THREE.MeshLambertMaterial({ map: matTexture('#7a5230', true), color: 0xd8b080 });
+  // 第一人称枪械材质：Phong 高光，金属/木纹更有质感
+  const DARK = new THREE.MeshPhongMaterial({ map: matTexture('#22252a', false), color: 0xaab0b8, shininess: 45, specular: 0x6a7280 });
+  const METAL = new THREE.MeshPhongMaterial({ map: matTexture('#3a3f46', false), color: 0xcdd2da, shininess: 90, specular: 0xaab4c0 });
+  const WOOD = new THREE.MeshPhongMaterial({ map: matTexture('#7a5230', true), color: 0xd8b080, shininess: 18, specular: 0x4a3a28 });
 
   function box(w, h, d, mat, x, y, z) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);

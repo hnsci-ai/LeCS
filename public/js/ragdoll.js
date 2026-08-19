@@ -96,9 +96,9 @@ const Ragdoll = (function () {
     try {
       const teamCol = team === GAMECONST.TEAM_T ? 0xc87f3a : 0x4f78a4;
       const dark = team === GAMECONST.TEAM_T ? 0x8a5a28 : 0x35506e;
-      const clothMat = new THREE.MeshLambertMaterial({ color: teamCol });
-      const legMat = new THREE.MeshLambertMaterial({ color: dark });
-      const skinMat = new THREE.MeshLambertMaterial({ color: 0xd9a87c });
+      const clothMat = new THREE.MeshPhongMaterial({ color: teamCol, shininess: 12, specular: 0x2a2a2a });
+      const legMat = new THREE.MeshPhongMaterial({ color: dark, shininess: 12, specular: 0x2a2a2a });
+      const skinMat = new THREE.MeshPhongMaterial({ color: 0xd9a87c, shininess: 22, specular: 0x3a3a3a });
       const mats = [clothMat, legMat, skinMat];
       const matFor = (k) => k === 'head' ? skinMat : (k.startsWith('leg') ? legMat : clothMat);
 
@@ -122,7 +122,13 @@ const Ragdoll = (function () {
         world.addBody(body);
 
         let geo = geoCache.get(def.k);
-        if (!geo) { geo = new THREE.BoxGeometry(def.s[0], def.s[1], def.s[2]); geoCache.set(def.k, geo); }
+        if (!geo) {
+          // 视觉部件与生者模型一致：头=球、躯干/四肢=圆柱（物理仍用盒体，判定不变）
+          if (def.k === 'head') geo = new THREE.SphereGeometry(def.s[0] / 2, 12, 9);
+          else if (def.k === 'torso') geo = new THREE.CylinderGeometry(def.s[0] / 2, def.s[0] / 2 * 0.9, def.s[1], 10);
+          else geo = new THREE.CylinderGeometry(def.s[0] / 2, def.s[0] / 2, def.s[1], 7);
+          geoCache.set(def.k, geo);
+        }
         const mesh = new THREE.Mesh(geo, matFor(def.k));
         mesh.castShadow = true;
         scene.add(mesh);
