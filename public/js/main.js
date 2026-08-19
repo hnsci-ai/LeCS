@@ -828,8 +828,6 @@ const Main = (function () {
     // 视图
     const view = computeView(dtReal);
     const players = interpolatePlayers();
-    Render.updatePlayers(players, S.myId);
-
     // 观战目标（死亡/等待时跟随队友，第一人称显示其武器与开镜）
     let specT = null;
     if (me && me[9] !== 1) {
@@ -842,6 +840,8 @@ const Main = (function () {
     } else {
       S.spectateId = 0;
     }
+    // 隐藏自己与被观战目标的第三人称模型（观战镜头在目标体内，不能看到目标的头饰/枪模）
+    Render.updatePlayers(players, S.myId, S.spectateId);
     const effScoped = (me && me[9] === 1) ? (S.scoped > 0) : !!(specT && specT.scoped > 0);
     const effScopedLv = (me && me[9] === 1) ? S.scoped : (specT ? specT.scoped : 0);
     const effWeapon = (me && me[9] === 1) ? (VM.weaponId() || '') : (specT ? specT.weapon : '');

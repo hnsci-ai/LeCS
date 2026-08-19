@@ -1479,13 +1479,14 @@ const Render = (function () {
     return m;
   }
 
-  function updatePlayers(list, myId) {
+  function updatePlayers(list, myId, hideId) {
     for (const [id, m] of playerMeshes) {
       if (!list.has(id)) m.group.visible = false;
     }
     list.forEach(p => {
       const m = ensurePlayer(p.id, p.team);
       if (p.id === myId) { m.group.visible = false; return; } // 自己由第一人称视角呈现
+      if (hideId && p.id === hideId) { m.group.visible = false; return; } // 观战目标：镜头在其体内，隐藏模型（否则看到帽檐/枪模）
       const g = m.group;
       g.visible = true;
       // 同步第三人称持枪模型（按当前武器切换，挂在胸前枪枢轴上随身体晃动）
