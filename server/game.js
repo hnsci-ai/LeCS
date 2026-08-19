@@ -233,6 +233,20 @@ class Game {
       }
     } else if (msg.cmd === 'money') {
       target.money = clamp(msg.amount || 0, 0, C.MAX_MONEY);
+    } else if (msg.cmd === 'plant') {
+      // 测试辅助：直接把 C4 置为已安放（渲染模型/雷达验证用）
+      this.bomb.state = C.BOMB_PLANTED;
+      this.bomb.carrier = null;
+      this.bomb.x = msg.x !== undefined ? msg.x : target.x;
+      this.bomb.y = 0;
+      this.bomb.z = msg.z !== undefined ? msg.z : target.z;
+      this.bomb.site = 'a';
+      this.bomb.timeLeft = C.BOMB_TIME;
+      this.emitEvent({ type: 'bomb', event: 'plant', site: 'a', planter: target.id, name: target.name });
+    } else if (msg.cmd === 'unplant') {
+      // 测试辅助：撤销安放（隐藏模型）
+      this.bomb.state = C.BOMB_HIDDEN;
+      this.bomb.carrier = null;
     }
   }
 

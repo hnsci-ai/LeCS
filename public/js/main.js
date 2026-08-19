@@ -343,6 +343,7 @@ const Main = (function () {
     Render.updateSmokes(snap.smokes || []);
     Render.updateHostages(snap.hostages || []);
     Render.updateCrates(snap.crates || []);
+    Render.updateBomb(snap.bomb || null);
 
     HUD.setKillfeed(snap.killfeed);
 

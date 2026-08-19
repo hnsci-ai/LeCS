@@ -442,6 +442,51 @@ const Render = (function () {
   }
   function _debugCrates() { return crateMeshes.filter(g => g.visible).length; }
 
+  // ---------- C4 炸药包（场上模型：掉落/安放后可见，安放后红灯闪烁） ----------
+  let bombGroup = null;
+  let bombLed = null;
+  let bombPlanted = false;
+  function buildBombModel() {
+    const g = new THREE.Group();
+    // 军绿色炸药砖（CS 经典配色）
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.26, 0.34),
+      new THREE.MeshLambertMaterial({ color: 0x4d5536 }));
+    body.position.y = 0.15;
+    g.add(body);
+    // 顶部键盘面板
+    const pad = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.06, 0.26),
+      new THREE.MeshLambertMaterial({ color: 0x2a2f2c }));
+    pad.position.y = 0.31;
+    g.add(pad);
+    // 面板按键条
+    const keys = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.014, 0.11),
+      new THREE.MeshLambertMaterial({ color: 0x9aa06e }));
+    keys.position.set(-0.02, 0.345, 0);
+    g.add(keys);
+    // 红色指示灯（安放后闪烁）
+    bombLed = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0xff2a1a }));
+    bombLed.position.set(0.18, 0.35, 0);
+    g.add(bombLed);
+    g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    g.visible = false;
+    scene.add(g);
+    bombGroup = g;
+    return g;
+  }
+  function updateBomb(b) {
+    const st = b ? b[0] : 'hidden';
+    if (st === 'planted' || st === 'dropped') {
+      if (!bombGroup) buildBombModel();
+      bombGroup.visible = true;
+      bombGroup.position.set(b[1], (b[2] || 0) + 0.001, b[3]);
+      bombPlanted = st === 'planted';
+    } else {
+      if (bombGroup) bombGroup.visible = false;
+      bombPlanted = false;
+    }
+  }
+
   // ---------- 烟雾弹烟团 ----------
   // 分层结构（同时解决"外面看不到里面"与"里面看不到外面"，且不再是一颗硬球）：
   //  1) 内壁烟球（BackSide）：站在烟里时四周是翻滚的灰烟墙；从外面看则盖住烟团后的一切背景
@@ -1427,6 +1472,10 @@ const Render = (function () {
     } else camera.rotation.z = 0;
     updateEffects(dt);
     animateSmokes(dt);
+    // C4 指示灯：安放后约 2.2Hz 闪烁；掉落时熄灭
+    if (bombGroup && bombGroup.visible && bombPlanted) {
+      bombLed.visible = (performance.now() % 900) < 450;
+    } else if (bombLed) bombLed.visible = false;
     renderer.render(scene, camera);
   }
 
@@ -1439,7 +1488,7 @@ const Render = (function () {
   function getCamera() { return camera; }
 
   return {
-    init, renderFrame, updatePlayers, tracer, impact, muzzleFlash, shell, flashAt, explosion, getCamera, flinch, updateNades, updateSmokes, updateHostages, updateCrates, setQuality, _debugCrates,
+    init, renderFrame, updatePlayers, tracer, impact, muzzleFlash, shell, flashAt, explosion, getCamera, flinch, updateNades, updateSmokes, updateHostages, updateCrates, updateBomb, setQuality, _debugCrates,
     // 烟雾视界强度（main.js 用；测试用 _debugSmoke）
     smokeStrength: () => smokeStrength,
     // 测试辅助
@@ -1455,6 +1504,8 @@ const Render = (function () {
       fogDensity: scene.fog === smokeFog ? +smokeFog.density.toFixed(3) : 0
     }),
     _debugSmokeSpheres: () => smokeWallPool.filter(m => m.visible).length,
+    _debugBomb: () => ({ visible: !!(bombGroup && bombGroup.visible), planted: bombPlanted }),
+    _debugBombLed: () => !!(bombLed && bombLed.visible),
     _debugArmor: () => {
       const out = {};
       for (const [id, m] of playerMeshes) {
