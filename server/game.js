@@ -1205,14 +1205,14 @@ class Game {
     if (!b || b.destroyed) return;
     b.destroyed = true;
     this.emitEvent({ type: 'barrel', event: 'explode', id: i, x: b.x, y: 0.6, z: b.z });
-    // 范围伤害：4.5 米内按距离衰减（可穿墙削减）
+    // 范围伤害：6 米内按距离衰减（中心 160 近身致命；穿墙削减 50%）
     this.players.forEach(v => {
       if (!v.alive) return;
       const dx = v.x - b.x, dz = v.z - b.z;
       const d = Math.sqrt(dx * dx + dz * dz);
-      if (d > 4.5) return;
+      if (d > 6.0) return;
       const los = this.mapData.losClear(b.x, 0.8, b.z, v.x, v.eye, v.z, 0.15);
-      const dmg = Math.round(95 * (1 - d / 4.5) * (los ? 1 : 0.4));
+      const dmg = Math.round(160 * (1 - d / 6.0) * (los ? 1 : 0.5));
       if (dmg > 0) this.applyDamage(v, attacker, { dmg, armorPen: 0.75 }, 1, d, 1, 'barrel');
     });
     // 连锁引爆邻近油桶
